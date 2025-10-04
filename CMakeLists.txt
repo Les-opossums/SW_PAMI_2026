@@ -34,8 +34,9 @@ project(PAMI_2026 C CXX ASM)
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
-
-add_executable(PAMI_2026 PAMI_2026.c )
+file(GLOB SRC_FILES src/c/*.c)
+add_executable(PAMI_2026 
+                ${SRC_FILES} )
 
 pico_set_program_name(PAMI_2026 "PAMI_2026")
 pico_set_program_version(PAMI_2026 "0.1")
@@ -50,7 +51,7 @@ target_link_libraries(PAMI_2026
 
 # Add the standard include files to the build
 target_include_directories(PAMI_2026 PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/src/headers
 )
 
 # Add any user requested libraries
