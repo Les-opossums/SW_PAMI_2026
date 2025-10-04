@@ -32,13 +32,5 @@
 #define DEFAULT_SPEED_LIN_STOP 0.05 // 5cm/s
 #define DEFAULT_SPEED_ROT_STOP 0.05 // 5rad/s
 
-/*############################################################################*/
-/*                                   PID                                      */
-/*############################################################################*/
-// PID dre la vitesse de chaque roue
-#define DEFAULT_PID_V_LIN_KP 9500 // kp
-#define DEFAULT_PID_V_LIN_KI 100   //ki
-#define DEFAULT_PID_V_LIN_KD 0   //kd   
-
 #endif // _LIB_ASSERV_DEFAULT_H_
 

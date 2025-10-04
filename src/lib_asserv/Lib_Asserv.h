@@ -16,5 +16,6 @@
 #include "speed_constrainer.h"
 #include "tools_asserv.h"
 #include "speed_constrainer.h"
+#include "PWM_Calculator.h"
 
 #endif // _LIB_ASSERV_H_

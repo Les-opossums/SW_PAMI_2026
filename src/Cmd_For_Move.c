@@ -248,34 +248,34 @@ float Param_Map_Asserv = 1.5;
 
 
 uint8_t Param_Asserv_Cmd(void) {
-    float valf1, valf2;
-    if (Get_Param_Float(&valf1))
-        return 1;
-    if (Get_Param_Float(&valf2))
-        return 1;
+    // float valf1, valf2;
+    // if (Get_Param_Float(&valf1))
+    //     return 1;
+    // if (Get_Param_Float(&valf2))
+    //     return 1;
 
-    int Param = (int)valf1;
-    //////////////////////////////////////////////////////////////////////////////////////////////
-    ////            10 V_Lin
-    ////            11 V_Lin KP
-    ////            12 V_Lin KI
-    ////            13 V_Lin KD
-    //////////////////////////////////////////////////////////////////////////////////////////////
-    if (Param == 10) {
-        printf("V_Lin\n");
-        printf("KP %f\n", (double)(pid_speed.coef.kp));
-        printf("KI %f\n", (double)(pid_speed.coef.ki));
-        printf("KD %f\n", (double)(pid_speed.coef.kd));
-    } else if (Param == 11) {
-        pid_speed.coef.kp = valf2;
-        printf("Set V_Lin KP to %f\n", (double)(pid_speed.coef.kp));
-    } else if (Param == 12) {
-        pid_speed.coef.ki = valf2;
-        printf("Set V_Lin KI to %f\n", (double)(pid_speed.coef.ki));
-    } else if (Param == 13) {
-        pid_speed.coef.kd = valf2;
-        printf("Set V_Lin KD to %f\n", (double)(pid_speed.coef.kd));
-    }
+    // int Param = (int)valf1;
+    // //////////////////////////////////////////////////////////////////////////////////////////////
+    // ////            10 V_Lin
+    // ////            11 V_Lin KP
+    // ////            12 V_Lin KI
+    // ////            13 V_Lin KD
+    // //////////////////////////////////////////////////////////////////////////////////////////////
+    // if (Param == 10) {
+    //     printf("V_Lin\n");
+    //     printf("KP %f\n", (double)(pid_speed.coef.kp));
+    //     printf("KI %f\n", (double)(pid_speed.coef.ki));
+    //     printf("KD %f\n", (double)(pid_speed.coef.kd));
+    // } else if (Param == 11) {
+    //     pid_speed.coef.kp = valf2;
+    //     printf("Set V_Lin KP to %f\n", (double)(pid_speed.coef.kp));
+    // } else if (Param == 12) {
+    //     pid_speed.coef.ki = valf2;
+    //     printf("Set V_Lin KI to %f\n", (double)(pid_speed.coef.ki));
+    // } else if (Param == 13) {
+    //     pid_speed.coef.kd = valf2;
+    //     printf("Set V_Lin KD to %f\n", (double)(pid_speed.coef.kd));
+    // }
     return 0;
 }
 

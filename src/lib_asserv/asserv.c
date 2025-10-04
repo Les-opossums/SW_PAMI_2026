@@ -34,9 +34,6 @@ void asserv_init(void) {
 	speed_constrainer_init();
     acceleration_constrainer_init();
 
-    // init PID
-	pid_vitesse_init();
-
 	// init des consignes / modes de ce fichier :
     asserv_mode = ASSERV_MODE_OFF;
     motion_done = 0;
