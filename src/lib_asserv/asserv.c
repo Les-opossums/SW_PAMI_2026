@@ -132,7 +132,6 @@ void asserv_off_step(void) {
 	speed_order.vx = 0;
 	speed_order.vy = 0;
 	speed_order.vt = 0;
-    Pid_Speed_En = 0;
     emergency_break_requested = 0;
     motion_off();
 }
@@ -142,7 +141,6 @@ void asserv_free_step(void)
 	speed_order.vx = 0;
 	speed_order.vy = 0;
 	speed_order.vt = 0;
-    Pid_Speed_En = 1;
 
 	if ((fabs(speed_robot.vx) < DEFAULT_SPEED_LIN_STOP) && 
         (fabs(speed_robot.vy) < DEFAULT_SPEED_LIN_STOP) && 
@@ -159,7 +157,6 @@ void speed_asserv_break_step(void) {
         speed_order.vx = 0;
         speed_order.vy = 0;
         speed_order.vt = 0;
-        Pid_Speed_En = 1;
     } else {
         emergency_break_requested = 0;
         motion_free();
@@ -204,10 +201,7 @@ void pos_asserv_step(void) {
     speed_order.vy = - vx_world * sin_t + vy_world * cos_t;
 
     // --- Calcul de la vitesse angulaire
-    speed_order.vt =  angular_speed_calculation(dt);;
-
-    // --- Activation de l’asservissement vitesse
-    Pid_Speed_En = 1;
+    speed_order.vt =  angular_speed_calculation(dt);
 
     // --- Stop condition globale (position + angle atteints)
     if ((d < current_stop_distance) && (fabs(dt) < DEFAULT_STOP_ANGLE)) {
@@ -234,7 +228,6 @@ void speed_asserv_step(void) {
 	speed_order.vx = Wanted_Speed.vx;
 	speed_order.vy = Wanted_Speed.vy;
 	speed_order.vt = Wanted_Speed.vt;
-    Pid_Speed_En = 1;
 }
 
 void absolute_speed_asserv_step(void) {
@@ -243,7 +236,6 @@ void absolute_speed_asserv_step(void) {
 	speed_order.vx =  Wanted_Speed.vx*cos_t + Wanted_Speed.vy*sin_t;
 	speed_order.vy = -Wanted_Speed.vx*sin_t + Wanted_Speed.vy*cos_t;
 	speed_order.vt = Wanted_Speed.vt;
-    Pid_Speed_En = 1;
 }
 
 

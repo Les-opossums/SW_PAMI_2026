@@ -12,7 +12,6 @@ typedef struct {
 
 extern Position position_robot;
 
-
 // Vitesse et vitesse angulaire du robot
 typedef struct {
     float vx; // en m/s
@@ -25,8 +24,6 @@ extern Speed Wanted_Speed;
 extern Speed speed_robot;
 extern Speed speed_robot_odom;
 
-
-
 // acceleration du robot (dv/dt,  d2theta/dt2   et   v*(dtheta/dt))
 typedef struct {
     float ax; // en m/s2
@@ -36,33 +33,12 @@ typedef struct {
 
 extern Acceleration acceleration_robot;
 
-
-/**************************** PID  *****************************/
-typedef struct {
-    float kp;
-    float ki;
-    float kd;
-} PID_coef;
-
-typedef struct {
-    float err;
-    float err_int;
-    float err_der;
-} PID_err;
-
-typedef struct {
-    PID_coef coef;
-    PID_err err1;
-    PID_err err2;
-    PID_err err3;
-} PID_speed;
-
 /**************************** Motor Command  ****************************/
 
 typedef struct {
-    float command1; // en %
-    float command2; // en %
-    float command3; // en %
+    int32_t command1;
+    int32_t command2;
+    int32_t command3;
 } MOTOR_Command;
 
 extern MOTOR_Command Consigne;
