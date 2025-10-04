@@ -39,6 +39,10 @@
     "raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.12.1/ninja",
     "files.associations": {
         "uart.h": "c",
-        "lidar_uart.h": "c"
+        "lidar_uart.h": "c",
+        "lib_asserv.h": "c",
+        "pami_2026.h": "c",
+        "compare": "c",
+        "cstdint": "c"
     }
 }

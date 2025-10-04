@@ -19,6 +19,8 @@ typedef struct {
     uint32_t step_period_us;  // Interval between steps in microseconds
 } StepperMotor;
 
+extern StepperMotor motors[NUM_MOTORS];
+
 void init_motors();
 
 #endif // STEPPER_H

@@ -15,7 +15,11 @@
 #include "LIDAR_UART.h"
 #include "Interpreteur.h"
 
+// include for move
 #include "STEPPER.h"
+#include "lib_asserv/Lib_Asserv.h"
+#include "Asserv_Loop.h"
+#include "Cmd_For_Move.h"
 
 #define Abs_Ternaire(a)   (((a)<0)?(-a):(a))
 #define Min_Ternaire(a,b) (((a)<(b))?(a):(b))
