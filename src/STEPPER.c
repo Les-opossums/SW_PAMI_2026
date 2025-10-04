@@ -47,3 +47,44 @@ void Move_Loop(){
         }
     }
 }
+
+uint8_t Move_Stepper_Cmd(void){
+    float val_1, val_2, val_3;
+    if (Get_Param_Float(&val_1)) val_1 = 0;
+    if (Get_Param_Float(&val_2)) val_2 = 0;
+    if (Get_Param_Float(&val_3)) val_3 = 0;
+
+    val_1 *= 1000;
+    val_2 *= 1000;
+    val_3 *= 1000;
+
+    Move_Stepper(val_1, val_2, val_3);
+    return 0;
+}
+
+void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
+    if(delay_1 < 10 || delay_1 > 1000000){
+        motors[0].enabled = false;
+    }else{
+        motors[0].step_period_us = abs(delay_1);
+        motors[0].dir_pin = (delay_1 > 0) ? 1 : 0;
+        motors[0].enabled = true;
+    }
+    
+    if(delay_2 < 10 || delay_2 > 1000000){
+        motors[1].enabled = false;
+    }else{
+        motors[1].step_period_us = abs(delay_2);
+        motors[1].dir_pin = (delay_2 > 0) ? 1 : 0;
+        motors[1].enabled = true;
+    }
+
+    if(delay_3 < 10 || delay_3 > 1000000){
+        motors[2].enabled = false;
+    }else{
+        motors[2].step_period_us = abs(delay_3);
+        motors[2].dir_pin = (delay_3 > 0) ? 1 : 0;
+        motors[2].enabled = true;
+    }
+
+}

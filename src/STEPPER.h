@@ -1,7 +1,7 @@
 #ifndef STEPPER_H
 #define STEPPER_H
 
-#define NUM_MOTORS 1
+#define NUM_MOTORS 3
 
 typedef struct {
     int step_pin;
@@ -22,5 +22,8 @@ typedef struct {
 extern StepperMotor motors[NUM_MOTORS];
 
 void init_motors();
+void Move_Loop();
+void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3);
+uint8_t Move_Stepper_Cmd(void);
 
 #endif // STEPPER_H

@@ -2,7 +2,7 @@
 #define __ASSERV_PWM_CALCULATOR_H_
 
 
-void Asserv_PWM_calculator(ESC_Command *commande);
+void Asserv_PWM_calculator(MOTOR_Command *commande);
 
 
 #endif

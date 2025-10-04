@@ -28,8 +28,8 @@ void pid_vitesse_reset (void) {
 }
 
 /******************************    Fonctions Utilitaires   *******************************/
-ESC_Command pid_speed_processing (PID_speed *pid, float err1, float err2, float err3) {
-    ESC_Command commande;
+MOTOR_Command pid_speed_processing (PID_speed *pid, float err1, float err2, float err3) {
+    MOTOR_Command commande;
     if (Pid_Speed_En) {
         //maj de la derivee de l'erreur du PID
         pid->err1.err_der = err1 - pid->err1.err;
@@ -45,22 +45,22 @@ ESC_Command pid_speed_processing (PID_speed *pid, float err1, float err2, float 
         // ne gere que si KI != 0
         if (pid->coef.ki != 0) {
             pid->err1.err_int += err1;
-            float max_int = (MOTOR_POWER_MAX - (pid->err1.err * pid->coef.kp)) / pid->coef.ki;
-            float min_int = (MOTOR_POWER_MIN - (pid->err1.err * pid->coef.kp)) / pid->coef.ki;
+            float max_int = (100 - (pid->err1.err * pid->coef.kp)) / pid->coef.ki;
+            float min_int = (-100 - (pid->err1.err * pid->coef.kp)) / pid->coef.ki;
             pid->err1.err_int = limit_float(pid->err1.err_int, min_int, max_int);
         }
 
         if (pid->coef.ki != 0) {
             pid->err2.err_int += err2;
-            float max_int = (MOTOR_POWER_MAX - (pid->err2.err * pid->coef.kp)) / pid->coef.ki;
-            float min_int = (MOTOR_POWER_MIN - (pid->err2.err * pid->coef.kp)) / pid->coef.ki;
+            float max_int = (100 - (pid->err2.err * pid->coef.kp)) / pid->coef.ki;
+            float min_int = (-100 - (pid->err2.err * pid->coef.kp)) / pid->coef.ki;
             pid->err2.err_int = limit_float(pid->err2.err_int, min_int, max_int);
         }
 
         if (pid->coef.ki != 0) {
             pid->err3.err_int += err3;
-            float max_int = (MOTOR_POWER_MAX - (pid->err3.err * pid->coef.kp)) / pid->coef.ki;
-            float min_int = (MOTOR_POWER_MIN - (pid->err3.err * pid->coef.kp)) / pid->coef.ki;
+            float max_int = (100 - (pid->err3.err * pid->coef.kp)) / pid->coef.ki;
+            float min_int = (-100 - (pid->err3.err * pid->coef.kp)) / pid->coef.ki;
             pid->err3.err_int = limit_float(pid->err3.err_int, min_int, max_int);
         }
         commande.command1 = pid->coef.kp * pid->err1.err + pid->coef.ki * pid->err1.err_int + pid->coef.kd * pid->err1.err_der;

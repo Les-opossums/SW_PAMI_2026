@@ -24,6 +24,10 @@ int Last_Timer_Asserv = 0;
 int Asserv_State = 0;
 int Asserv_Odo_Count = 0;
 
+MOTOR_Command Consigne;
+MOTOR_Command Wanted_Forced_Consigne;
+MOTOR_Command old_Consigne;
+
 float dx, dy, dt = 0;
 
 void Init_Asserv(void) {
@@ -103,28 +107,8 @@ void Asserv_Loop(void)
 
 
     } else if (Asserv_State == 40) {
-        if ((Wanted_Forced_Consigne.command1 != 0) || 
-            (Wanted_Forced_Consigne.command2 != 0) || 
-            (Wanted_Forced_Consigne.command3 != 0)) {
-
-            Consigne = Wanted_Forced_Consigne;
-        }
+        Move_Stepper(Consigne.command1, Consigne.command2, Consigne.command3);
         
-        float Abs_Consigne1 = Abs_Ternaire(Consigne.command1);
-        float Abs_Consigne2 = Abs_Ternaire(Consigne.command2);
-        float Abs_Consigne3 = Abs_Ternaire(Consigne.command3);
-        
-        float Consigne_Max = Max_Trois(Abs_Consigne1, Abs_Consigne2, Abs_Consigne3);
-
-        if (Consigne_Max > 10000) {
-            float Consigne_rapport = 10000.0/Consigne_Max;
-            Consigne.command1 *= Consigne_rapport;
-            Consigne.command2 *= Consigne_rapport;
-            Consigne.command3 *= Consigne_rapport;
-        }
-
-        old_Consigne = Consigne;
-       
         Asserv_State = 50;
 
     } else if (Asserv_State == 50) {

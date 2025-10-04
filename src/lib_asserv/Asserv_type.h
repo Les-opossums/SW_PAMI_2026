@@ -10,7 +10,6 @@ typedef struct {
     float t; // en radian
 } Position;
 
-extern Position position_robot_odom;
 extern Position position_robot;
 
 
@@ -58,16 +57,16 @@ typedef struct {
     PID_err err3;
 } PID_speed;
 
+/**************************** Motor Command  ****************************/
 
-typedef struct{
-    float command1;
-    float command2;
-    float command3;
-} ESC_Command;
+typedef struct {
+    float command1; // en %
+    float command2; // en %
+    float command3; // en %
+} MOTOR_Command;
 
-extern ESC_Command Consigne;
-extern ESC_Command Wanted_Forced_Consigne;
-extern ESC_Command old_Consigne;
-
+extern MOTOR_Command Consigne;
+extern MOTOR_Command Wanted_Forced_Consigne;
+extern MOTOR_Command old_Consigne;
 
 #endif

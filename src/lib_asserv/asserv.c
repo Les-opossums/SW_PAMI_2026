@@ -37,10 +37,6 @@ void asserv_init(void) {
     // init PID
 	pid_vitesse_init();
 
-    // init kalman
-    kalman_init(&kalman_current_state);
-    kalman_fifo_init(&kalman_fifo);
-
 	// init des consignes / modes de ce fichier :
     asserv_mode = ASSERV_MODE_OFF;
     motion_done = 0;
@@ -181,9 +177,9 @@ void pos_asserv_step(void) {
     float t_o = Wanted_Pos.t;
 
     // --- État actuel
-    float x = kalman_current_state.x[0];
-    float y = kalman_current_state.x[1];
-    float t = kalman_current_state.x[2];
+    float x = position_robot.x;
+    float y = position_robot.y;
+    float t = position_robot.t;
 
     // --- Erreurs
     float rdx = x_o - x;
@@ -242,8 +238,8 @@ void speed_asserv_step(void) {
 }
 
 void absolute_speed_asserv_step(void) {
-    float cos_t = cos(position_robot_odom.t);
-    float sin_t = sin(position_robot_odom.t);
+    float cos_t = cos(position_robot.t);
+    float sin_t = sin(position_robot.t);
 	speed_order.vx =  Wanted_Speed.vx*cos_t + Wanted_Speed.vy*sin_t;
 	speed_order.vy = -Wanted_Speed.vx*sin_t + Wanted_Speed.vy*cos_t;
 	speed_order.vt = Wanted_Speed.vt;

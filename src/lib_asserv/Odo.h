@@ -2,7 +2,7 @@
 #define __ODO_H_
 
 extern float robot_wheel_distance;
-
+extern float speed_1, speed_2, speed_3;
 /******************************    Fonctions    *******************************/
 
 // initialiser l'odometrie

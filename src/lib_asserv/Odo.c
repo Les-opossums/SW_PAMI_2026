@@ -11,7 +11,10 @@ Position position_robot_cumul; // cumul des steps pour le calcul de la vitesse
 
 Acceleration acceleration_robot;
 
-int32_t step_1, step_2, step_3; // position en step des roues
+int32_t step_1, step_2, step_3 = 0; // position en step des roues
+int32_t cumul_step_1, cumul_step_2, cumul_step_3 = 0; // cumul des steps pour le calcul de la vitesse
+
+float speed_1, speed_2, speed_3 = 0; // vitesses des roues en m/s
 
 /******************************    Fonctions    *******************************/
 
@@ -55,6 +58,11 @@ void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
     position_robot_cumul.y += dy;
     position_robot_cumul.t += dt;
 
+    // cumul des steps pour le calcul de la vitesse
+    cumul_step_1 += delta_pos1;
+    cumul_step_2 += delta_pos2;
+    cumul_step_3 += delta_pos3;
+
     // maj des positions des roues
     step_1 = pos1;
     step_2 = pos2;
@@ -76,10 +84,15 @@ void odo_speed_step(float period) {
     float old_vy = speed_robot.vy;
     float old_vt = speed_robot.vt;
 
-    // calcul des vitesses
+    // calcul des vitesses dans le repere robot
     speed_robot.vx = position_robot_cumul.x / period;
     speed_robot.vy = position_robot_cumul.y / period;
     speed_robot.vt = position_robot_cumul.t / period;
+
+    // calcul des vitesses des roues
+    speed_1 = cumul_step_1 / period;
+    speed_2 = cumul_step_2 / period;
+    speed_3 = cumul_step_3 / period;
 
     // reset les cumuls
     position_robot_cumul.x = 0;

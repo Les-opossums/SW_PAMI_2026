@@ -12,7 +12,7 @@ void pid_vitesse_init(void);
 void pid_vitesse_reset(void); //reset des erreurs integrales des pid
 
 /******************************    Fonctions Utilitaires   *******************************/
-ESC_Command pid_speed_processing(PID_speed *pid, float err1, float err2, float err3);
+MOTOR_Command pid_speed_processing(PID_speed *pid, float err1, float err2, float err3);
 
 
 
