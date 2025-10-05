@@ -33,8 +33,6 @@ void odo_init(void) {
     acceleration_robot.ax = 0;
     acceleration_robot.ay = 0;
     acceleration_robot.at = 0;
-
-    // xil_printf("Odo init done\n");
 }
 
 // assigner une valeur e l'ecart entre les roues d'odometrie
@@ -43,10 +41,11 @@ void odo_set_spacing(float param_spacing) {
 }
 
 void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
-    //calculs des pos intermédiaires des roues   
-    float delta_pos1 = (float)(((int32_t)(pos1 - step_1)) * DEFAULT_SIZE_WHEEL*PI/(200*16));
-    float delta_pos2 = (float)(((int32_t)(pos2 - step_2)) * DEFAULT_SIZE_WHEEL*PI/(200*16));
-    float delta_pos3 = (float)(((int32_t)(pos3 - step_3)) * DEFAULT_SIZE_WHEEL*PI/(200*16));
+    //calculs des pos intermédiaires des roues 
+    const float step_to_m = (DEFAULT_SIZE_WHEEL * M_PI) / (200.0f * 16.0f);  
+    float delta_pos1 = (float)((int32_t)(pos1 - step_1)) * step_to_m;
+    float delta_pos2 = (float)((int32_t)(pos2 - step_2)) * step_to_m;
+    float delta_pos3 = (float)((int32_t)(pos3 - step_3)) * step_to_m;
 
     // calculs du déplacement depuis le dernier step
     float dx = (2.0f/3.0f) * (delta_pos1) - (1.0f/3.0f) * (delta_pos2 + delta_pos3);
@@ -66,8 +65,10 @@ void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
     // maj de la position odometrique pur
     float cos_t = cosf(position_robot.t);
     float sin_t = sinf(position_robot.t);
+
     float dx_global = dx * cos_t - dy * sin_t;
     float dy_global = dx * sin_t + dy * cos_t;
+    
     position_robot.x += dx_global;
     position_robot.y += dy_global;
     position_robot.t = principal_angle(position_robot.t + dt);
@@ -83,8 +84,6 @@ void odo_speed_step(float period) {
     speed_robot.vx = position_robot_cumul.x / period;
     speed_robot.vy = position_robot_cumul.y / period;
     speed_robot.vt = position_robot_cumul.t / period;
-
-    // printf("Speed odo %.2f %.2f %.2f\n", (double)speed_robot.vx, (double)speed_robot.vy, (double)speed_robot.vt);
 
     // reset les cumuls
     position_robot_cumul.x = 0;

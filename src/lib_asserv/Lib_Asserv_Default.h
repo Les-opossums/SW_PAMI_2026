@@ -14,11 +14,11 @@
 /*############################################################################*/
 /*                                  Motion                                    */
 /*############################################################################*/
-#define DEFAULT_CONSTRAINT_V_MAX 0.2
-#define DEFAULT_CONSTRAINT_VT_MAX 0.5
+#define DEFAULT_CONSTRAINT_V_MAX 0.5
+#define DEFAULT_CONSTRAINT_VT_MAX 1
 
-#define DEFAULT_CONSTRAINT_A_MAX 0.2
-#define DEFAULT_CONSTRAINT_AT_MAX 0.5
+#define DEFAULT_CONSTRAINT_A_MAX 0.5
+#define DEFAULT_CONSTRAINT_AT_MAX 1
 
 #define ASSERV_BLOCK_TIME_LIMIT 1   // 1s "blocké" avant de tout couper
 
