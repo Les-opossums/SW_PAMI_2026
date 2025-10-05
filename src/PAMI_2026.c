@@ -9,11 +9,14 @@ int main()
     Init_All();
 
     printf("PAMI-2026 ready.\n");
-    
+
     while (true) {
         Timer_Update(); // Met à jour les timers
 
         int c;
+
+        // Met à jour les moteurs pas à pas
+        Move_Loop();
 
         switch (sequencer) {
             case 0:
@@ -24,7 +27,7 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                Move_Loop();
+                Asserv_Loop();
                 sequencer++;
                 break;
 
@@ -38,4 +41,5 @@ int main()
 void Init_All(void)
 {
     init_motors();
+    Init_Asserv();
 }

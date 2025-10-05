@@ -6,8 +6,8 @@
 /*############################################################################*/
 
 // {tic/m, m/tic, entre roues}
-#define DEFAULT_ODO_SPACING  0.115//0.115
-#define DEFAULT_SIZE_WHEEL 0.060 // 6cm
+#define DEFAULT_ODO_SPACING  0.045//0.115
+#define DEFAULT_SIZE_WHEEL 0.050 // 6cm
 #define DEFAULT_WHEEL_RADIUS DEFAULT_SIZE_WHEEL/2 // 3cm
 #define DEFAULT_STEPS_PER_REV 16 * 200 // 1/16 de microstep sur un moteur 200 pas (1.8° par pas)
 

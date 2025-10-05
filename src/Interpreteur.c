@@ -15,6 +15,25 @@ const Command Command_List[] = {
     { "SPEED", SPEED_Cmd},
     { "ASPEED", Absolute_SPEED_Cmd},
     { "MOVE", Move_Cmd},
+    { "FREE", FREE_Cmd},
+    { "BLOCK", BLOCK_Cmd},
+    { "ASSERV_DONE", Asserv_Done_Cmd},
+    { "GETPOS", Get_Pos_Cmd},
+    { "GETODO", Get_Odo_Cmd},
+    { "SETX", SETX_Cmd},
+    { "SETY", SETY_Cmd},
+    { "SETT", SETT_Cmd},
+    { "SET0", SET0_Cmd},
+
+    { "VMAX", VMAX_Cmd},
+    { "VTMAX", VTMAX_Cmd},
+    { "AMAX", AMAX_Cmd},
+
+    { "PARAM_ASSERV", Param_Asserv_Cmd},
+
+    { "MAP_ASSERV", MaP_Asserv_Cmd},
+
+    { "PDE", Activate_Position_Sending_Func},
 
     { "MSTEP", Move_Stepper_Cmd}
 };
