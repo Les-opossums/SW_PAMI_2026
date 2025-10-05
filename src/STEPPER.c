@@ -27,7 +27,7 @@ void init_motors() {
         gpio_put(motors[i].pins.dir_pin, 0);
 
         motors[i].current_position = 0;
-        motors[i].enabled = true;
+        motors[i].enabled = false;
         motors[i].last_step_time_us = 0;
         motors[i].step_period_us = 1000; // Default to 1000us (1ms) between steps
     }
@@ -71,7 +71,7 @@ uint8_t Move_Stepper_Cmd(void){
 }
 
 void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
-    if(delay_1 < 10 || delay_1 > 1000000){
+    if(abs(delay_1) < 10 || abs(delay_1) > 1000000){
         motors[0].enabled = false;
     }else{
         motors[0].step_period_us = abs(delay_1);
@@ -79,7 +79,7 @@ void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
         motors[0].enabled = true;
     }
     
-    if(delay_2 < 10 || delay_2 > 1000000){
+    if(abs(delay_2) < 10 || abs(delay_2) > 1000000){
         motors[1].enabled = false;
     }else{
         motors[1].step_period_us = abs(delay_2);
@@ -87,7 +87,7 @@ void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
         motors[1].enabled = true;
     }
 
-    if(delay_3 < 10 || delay_3 > 1000000){
+    if(abs(delay_3) < 10 || abs(delay_3) > 1000000){
         motors[2].enabled = false;
     }else{
         motors[2].step_period_us = abs(delay_3);

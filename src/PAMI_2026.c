@@ -8,6 +8,8 @@ int main()
 
     Init_All();
 
+    printf("PAMI-2026 ready.\n");
+    
     while (true) {
         Timer_Update(); // Met à jour les timers
 
