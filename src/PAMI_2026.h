@@ -14,6 +14,7 @@
 #include "Timer.h"
 #include "LIDAR_UART.h"
 #include "Interpreteur.h"
+#include "BAU.h"
 
 // include for move
 #include "STEPPER.h"
