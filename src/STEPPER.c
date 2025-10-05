@@ -7,19 +7,27 @@ StepperMotor motors[NUM_MOTORS];
 void init_motors() {
     motors[0].pins.step_pin = PIN_STEP_1;
     motors[0].pins.dir_pin = PIN_DIR_1;
-    motors[0].pins.en_pin = 0; // disable pin
+    // motors[0].pins.en_pin = 0; // disable pin
 
-    // motors[1].pins.step_pin = PIN_STEP_2;
-    // motors[1].pins.dir_pin = PIN_DIR_2;
+    motors[1].pins.step_pin = PIN_STEP_2;
+    motors[1].pins.dir_pin = PIN_DIR_2;
     // motors[1].pins.en_pin = 0; // disable pin
 
-    // motors[2].pins.step_pin = PIN_STEP_3;
-    // motors[2].pins.dir_pin = PIN_DIR_3;
+    motors[2].pins.step_pin = PIN_STEP_3;
+    motors[2].pins.dir_pin = PIN_DIR_3;
     // motors[2].pins.en_pin = 0; // disable pin
 
     for (int i = 0; i < NUM_MOTORS; i++) {
+        gpio_init(motors[i].pins.step_pin);
+        gpio_set_dir(motors[i].pins.step_pin, GPIO_OUT);
+        gpio_put(motors[i].pins.step_pin, 0);
+
+        gpio_init(motors[i].pins.dir_pin);
+        gpio_set_dir(motors[i].pins.dir_pin, GPIO_OUT);
+        gpio_put(motors[i].pins.dir_pin, 0);
+
         motors[i].current_position = 0;
-        motors[i].enabled = false;
+        motors[i].enabled = true;
         motors[i].last_step_time_us = 0;
         motors[i].step_period_us = 1000; // Default to 1000us (1ms) between steps
     }

@@ -3,8 +3,6 @@
 int main()
 {
     stdio_init_all();
-
-    LIDAR_UART_init();
     
     int sequencer = 0;
 
@@ -23,6 +21,10 @@ int main()
 				}
                 sequencer++;
                 break;
+            case 1:
+                Move_Loop();
+                sequencer++;
+                break;
 
             default:
                 sequencer = 0;
@@ -33,5 +35,5 @@ int main()
 
 void Init_All(void)
 {
-    
+    init_motors();
 }

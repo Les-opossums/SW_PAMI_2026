@@ -9,7 +9,14 @@ const Command Command_List[] = {
 
     { "PRINTCMD", Print_All_CMD_Cmd},
     { "HELP", Print_All_CMD_Cmd},
-    { "TEST", Test_Interpreteur}
+    { "TEST", Test_Interpreteur},
+
+    //commands for asserv
+    { "SPEED", SPEED_Cmd},
+    { "ASPEED", Absolute_SPEED_Cmd},
+    { "MOVE", Move_Cmd},
+
+    { "MSTEP", Move_Stepper_Cmd}
 };
 
 const uint16_t Command_List_Length = sizeof (Command_List) / sizeof (Command_List[0]);
