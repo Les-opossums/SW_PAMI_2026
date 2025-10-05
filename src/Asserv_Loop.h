@@ -3,9 +3,9 @@
 
 
 // calcul d'un step d'odometrie toutes les 2 ms
-#define ODO_EVERY_MS 1
+#define ODO_EVERY_MS 2
 // asserv tous les 5 steps d'odo
-#define ASSERV_EVERY 10
+#define ASSERV_EVERY 5
 
 #define PWM_BLOCK_LIMIT 90      // % de PWM qui declenche la limite
 #define BLOCK_MAX_TIME  2000    // temps en ms au bout duquel il se verouille

@@ -38,10 +38,12 @@ void Move_Loop(){
     for (int i=0; i<NUM_MOTORS; i++){
         if(motors[i].enabled){
             if(current_time_us - motors[i].last_step_time_us >= motors[i].step_period_us){
+
                 motors[i].last_step_time_us = current_time_us; // Update last step time
                 motors[i].step_pin = !motors[i].step_pin; // Toggle step pin
                 gpio_put(motors[i].pins.step_pin, motors[i].step_pin);
                 gpio_put(motors[i].pins.dir_pin, motors[i].dir_pin);
+                
                 if(motors[i].step_pin){
                     if(motors[i].dir_pin){
                         motors[i].current_position++; // Move forward

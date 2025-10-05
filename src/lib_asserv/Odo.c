@@ -44,9 +44,9 @@ void odo_set_spacing(float param_spacing) {
 
 void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
     //calculs des pos intermédiaires des roues   
-    float delta_pos1 = (float)(((int32_t)(pos1 - step_1)) * DEFAULT_SIZE_WHEEL * PI / DEFAULT_STEPS_PER_REV);
-    float delta_pos2 = (float)(((int32_t)(pos2 - step_2)) * DEFAULT_SIZE_WHEEL * PI / DEFAULT_STEPS_PER_REV);
-    float delta_pos3 = (float)(((int32_t)(pos3 - step_3)) * DEFAULT_SIZE_WHEEL * PI / DEFAULT_STEPS_PER_REV);
+    float delta_pos1 = (float)(((int32_t)(pos1 - step_1)) * DEFAULT_SIZE_WHEEL*PI/(200*16));
+    float delta_pos2 = (float)(((int32_t)(pos2 - step_2)) * DEFAULT_SIZE_WHEEL*PI/(200*16));
+    float delta_pos3 = (float)(((int32_t)(pos3 - step_3)) * DEFAULT_SIZE_WHEEL*PI/(200*16));
 
     // calculs du déplacement depuis le dernier step
     float dx = (2.0f/3.0f) * (delta_pos1) - (1.0f/3.0f) * (delta_pos2 + delta_pos3);
@@ -83,6 +83,8 @@ void odo_speed_step(float period) {
     speed_robot.vx = position_robot_cumul.x / period;
     speed_robot.vy = position_robot_cumul.y / period;
     speed_robot.vt = position_robot_cumul.t / period;
+
+    // printf("Speed odo %.2f %.2f %.2f\n", (double)speed_robot.vx, (double)speed_robot.vy, (double)speed_robot.vt);
 
     // reset les cumuls
     position_robot_cumul.x = 0;
