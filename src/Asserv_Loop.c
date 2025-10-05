@@ -109,10 +109,6 @@ void Asserv_Loop(void)
     } else if (Asserv_State == 40) {
         Move_Stepper(Consigne.command1, Consigne.command2, Consigne.command3);
         
-        Asserv_State = 50;
-
-    } else if (Asserv_State == 50) {
-        Move_Stepper(Consigne.command1, Consigne.command2, Consigne.command3);
         Asserv_State = 60;
 
     } else if (Asserv_State == 60) {

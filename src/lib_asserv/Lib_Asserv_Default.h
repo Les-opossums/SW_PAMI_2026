@@ -6,19 +6,19 @@
 /*############################################################################*/
 
 // {tic/m, m/tic, entre roues}
-#define DEFAULT_ODO_SPACING  0.045//0.115
-#define DEFAULT_SIZE_WHEEL 0.050 // 6cm
-#define DEFAULT_WHEEL_RADIUS DEFAULT_SIZE_WHEEL/2 // 3cm
+#define DEFAULT_ODO_SPACING  0.045
+#define DEFAULT_SIZE_WHEEL 0.050
+#define DEFAULT_WHEEL_RADIUS DEFAULT_SIZE_WHEEL/2 
 #define DEFAULT_STEPS_PER_REV 16 * 200 // 1/16 de microstep sur un moteur 200 pas (1.8° par pas)
 
 /*############################################################################*/
 /*                                  Motion                                    */
 /*############################################################################*/
-#define DEFAULT_CONSTRAINT_V_MAX 1.5
-#define DEFAULT_CONSTRAINT_VT_MAX 1
+#define DEFAULT_CONSTRAINT_V_MAX 0.2
+#define DEFAULT_CONSTRAINT_VT_MAX 0.5
 
-#define DEFAULT_CONSTRAINT_A_MAX 1.5
-#define DEFAULT_CONSTRAINT_AT_MAX 0.7
+#define DEFAULT_CONSTRAINT_A_MAX 0.2
+#define DEFAULT_CONSTRAINT_AT_MAX 0.5
 
 #define ASSERV_BLOCK_TIME_LIMIT 1   // 1s "blocké" avant de tout couper
 
