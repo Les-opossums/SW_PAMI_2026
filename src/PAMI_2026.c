@@ -11,7 +11,7 @@ int main()
     printf("PAMI-2026 ready.\n");
 
     char ssid[] = "Opossum";           // your network SSID (name)
-    char password[] = "XXXXXXX";       // your network password
+    char password[] = "xxxx";       // your network password
 
     if (cyw43_arch_init_with_country(CYW43_COUNTRY_FRANCE)) {
         printf("failed to initialise\n");
@@ -25,46 +25,35 @@ int main()
         return 1;
     }
 
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)calloc(1, sizeof(TCP_CLIENT_T));
-    if (!state) {
-        printf("failed to allocate state\n");
+    TCP_SERVER_T *server = tcp_server_init();
+    if (!server) {
+        printf("failed to create server\n");
+        return 1;
+    }
+    if (!tcp_server_open(server)) {
+        printf("failed to open server\n");
         return 1;
     }
 
-    ip4addr_aton(TEST_TCP_SERVER_IP, &state->remote_addr);
-
-    printf("Connecting to %s port %u\n", ip4addr_ntoa(&state->remote_addr), TCP_PORT);
-    connect_client(state);
-
     uint32_t tcp_timer = to_ms_since_boot(get_absolute_time());
+
+
+    float x = 0, y = 0, theta = 0;
+
 
     while (true) {
         Timer_Update(); // Met à jour les timers
         int c;
-
-        // Affichage des données reçues
-        if (state->rx_buffer_len) {
-            printf("%.*s\r\n", state->rx_buffer_len, (char *)state->rx_buffer);
-            state->rx_buffer_len = 0;
-        }
-
+        cyw43_arch_poll();
         // Toutes les secondes
         if ((Timer_ms1 - tcp_timer) > 1000) {
-            if (state->connected == TCP_CONNECTED) {
-                char test[20] = "test";
-                state->buffer_len = WS_BuildPacket((char *)state->buffer, BUF_SIZE,
-                                                   WEBSOCKET_OPCODE_TEXT, test,
-                                                   strlen(test), 1);
+            
+                
+            send_pose_to_foxglove(server, x, y, theta);
 
-                err_t err = tcp_write(state->tcp_pcb, state->buffer, state->buffer_len, TCP_WRITE_FLAG_COPY);
-                if (err != ERR_OK) {
-                    printf("Failed to write data %d\n", err);
-                }
-            }
-
-            if (state->connected == TCP_DISCONNECTED) {
-                connect_client(state);
-            }
+            // simulation d’évolution
+            x += 0.05f;
+            theta += 0.01f;
 
             tcp_timer = to_ms_since_boot(get_absolute_time());
         }
@@ -97,3 +86,4 @@ void Init_All(void)
     init_motors();
     Init_Asserv();
 }
+

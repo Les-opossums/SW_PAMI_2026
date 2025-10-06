@@ -1,125 +1,188 @@
 #include "PAMI_2026.h"
 
-err_t tcp_client_sent(void *arg, struct tcp_pcb *tpcb, uint16_t len) {
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-    printf("tcp_client_sent %u\n", len);
-    return ERR_OK;
-}
-
-err_t tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-    if (err != ERR_OK) {
-        printf("Connect failed %d\n", err);
-        return err;
+TCP_SERVER_T* tcp_server_init(void) {
+    TCP_SERVER_T *state = calloc(1, sizeof(TCP_SERVER_T));
+    if (!state) {
+        DEBUG_printf("failed to allocate state\n");
+        return NULL;
     }
-    // Envoi de la requête HTTP pour upgrade WebSocket
-    state->buffer_len = sprintf((char *)state->buffer,
-        "GET / HTTP/1.1\r\n"
-        "Host: REMOVED:8082\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n"
-        "Sec-WebSocket-Protocol: chat, superchat\r\n"
-        "Sec-WebSocket-Version: 13\r\n\r\n");
-
-    err = tcp_write(state->tcp_pcb, state->buffer, state->buffer_len, TCP_WRITE_FLAG_COPY);
-
-    state->connected = TCP_CONNECTED;
-
-    printf("Connected\r\n");
-    return ERR_OK;
+    return state;
 }
 
-err_t tcp_client_poll(void *arg, struct tcp_pcb *tpcb) {
-    printf("tcp_client_poll\n");
-    return ERR_OK;
-}
-
-void tcp_client_err(void *arg, err_t err) {
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-    state->connected = TCP_DISCONNECTED;
-    if (err != ERR_ABRT) {
-        printf("tcp_client_err %d\n", err);
-    } else {
-        printf("tcp_client_err abort %d\n", err);
-    }
-}
-
-err_t tcp_client_close(void *arg) {
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
+err_t tcp_server_close(void *arg) {
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
     err_t err = ERR_OK;
-
-    if (state->tcp_pcb != NULL) {
-        tcp_arg(state->tcp_pcb, NULL);
-        tcp_poll(state->tcp_pcb, NULL, 0);
-        tcp_sent(state->tcp_pcb, NULL);
-        tcp_recv(state->tcp_pcb, NULL);
-        tcp_err(state->tcp_pcb, NULL);
-        err = tcp_close(state->tcp_pcb);
+    if (state->client_pcb != NULL) {
+        tcp_arg(state->client_pcb, NULL);
+        tcp_poll(state->client_pcb, NULL, 0);
+        tcp_sent(state->client_pcb, NULL);
+        tcp_recv(state->client_pcb, NULL);
+        tcp_err(state->client_pcb, NULL);
+        err = tcp_close(state->client_pcb);
         if (err != ERR_OK) {
-            printf("close failed %d, calling abort\n", err);
-            tcp_abort(state->tcp_pcb);
+            DEBUG_printf("close failed %d, calling abort\n", err);
+            tcp_abort(state->client_pcb);
             err = ERR_ABRT;
         }
-        state->tcp_pcb = NULL;
+        state->client_pcb = NULL;
     }
-
-    state->connected = TCP_DISCONNECTED;
+    if (state->server_pcb) {
+        tcp_arg(state->server_pcb, NULL);
+        tcp_close(state->server_pcb);
+        state->server_pcb = NULL;
+    }
     return err;
 }
 
-err_t tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
+err_t tcp_server_result(void *arg, int status) {
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+    if (status == 0) {
+        DEBUG_printf("test success\n");
+    } else {
+        DEBUG_printf("test failed %d\n", status);
+    }
+    state->complete = true;
+    return tcp_server_close(arg);
+}
 
-    if (!p) {
-        tcp_client_close(arg);
-        return ERR_OK;
+err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+    DEBUG_printf("tcp_server_sent %u\n", len);
+    state->sent_len += len;
+
+    if (state->sent_len >= BUF_SIZE) {
+
+        // We should get the data back from the client
+        state->recv_len = 0;
+        DEBUG_printf("Waiting for buffer from client\n");
     }
 
-    cyw43_arch_lwip_check();
-    state->rx_buffer_len = 0;
-
-    if (p->tot_len > 0) {
-        for (struct pbuf *q = p; q != NULL; q = q->next) {
-            if ((state->rx_buffer_len + q->len) < BUF_SIZE) {
-                WebsocketPacketHeader_t header;
-                WS_ParsePacket(&header, (char *)q->payload, q->len);
-                memcpy(state->rx_buffer + state->rx_buffer_len,
-                       (uint8_t *)q->payload + header.start,
-                       header.length);
-                state->rx_buffer_len += header.length;
-            }
-        }
-        tcp_recved(tpcb, p->tot_len);
-    }
-
-    pbuf_free(p);
     return ERR_OK;
 }
 
-err_t connect_client(void *arg) {
-    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-
-    if (state->connected != TCP_DISCONNECTED) return ERR_OK;
-
-    state->tcp_pcb = tcp_new_ip_type(IP_GET_TYPE(&state->remote_addr));
-    if (!state->tcp_pcb) {
-        printf("failed to create tcp pcb\n");
-        return ERR_MEM;
+err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb)
+{
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+    for(int i=0; i< BUF_SIZE; i++) {
+        state->buffer_sent[i] = rand();
     }
 
-    tcp_arg(state->tcp_pcb, state);
-    tcp_poll(state->tcp_pcb, tcp_client_poll, 1);
-    tcp_sent(state->tcp_pcb, tcp_client_sent);
-    tcp_recv(state->tcp_pcb, tcp_client_recv);
-    tcp_err(state->tcp_pcb, tcp_client_err);
-
-    state->buffer_len = 0;
-
-    cyw43_arch_lwip_begin();
-    state->connected = TCP_CONNECTING;
-    err_t err = tcp_connect(state->tcp_pcb, &state->remote_addr, TCP_PORT, tcp_client_connected);
-    cyw43_arch_lwip_end();
-
-    return err;
+    state->sent_len = 0;
+    DEBUG_printf("Writing %ld bytes to client\n", BUF_SIZE);
+    // this method is callback from lwIP, so cyw43_arch_lwip_begin is not required, however you
+    // can use this method to cause an assertion in debug mode, if this method is called when
+    // cyw43_arch_lwip_begin IS needed
+    cyw43_arch_lwip_check();
+    err_t err = tcp_write(tpcb, state->buffer_sent, BUF_SIZE, TCP_WRITE_FLAG_COPY);
+    if (err != ERR_OK) {
+        DEBUG_printf("Failed to write data %d\n", err);
+        return tcp_server_result(arg, -1);
+    }
+    return ERR_OK;
 }
+
+err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+    if (!p) {
+        return tcp_server_result(arg, -1);
+    }
+    // this method is callback from lwIP, so cyw43_arch_lwip_begin is not required, however you
+    // can use this method to cause an assertion in debug mode, if this method is called when
+    // cyw43_arch_lwip_begin IS needed
+    cyw43_arch_lwip_check();
+    if (p->tot_len > 0) {
+        DEBUG_printf("tcp_server_recv %d/%d err %d\n", p->tot_len, state->recv_len, err);
+
+        // Receive the buffer
+        const uint16_t buffer_left = BUF_SIZE - state->recv_len;
+        state->recv_len += pbuf_copy_partial(p, state->buffer_recv + state->recv_len,
+                                             p->tot_len > buffer_left ? buffer_left : p->tot_len, 0);
+        tcp_recved(tpcb, p->tot_len);
+    }
+    pbuf_free(p);
+
+    // Have we have received the whole buffer
+    if (state->recv_len == BUF_SIZE) {
+
+        // check it matches
+        if (memcmp(state->buffer_sent, state->buffer_recv, BUF_SIZE) != 0) {
+            DEBUG_printf("buffer mismatch\n");
+            return tcp_server_result(arg, -1);
+        }
+        DEBUG_printf("tcp_server_recv buffer ok\n");
+
+        // Test complete?
+        state->run_count++;
+        if (state->run_count >= TEST_ITERATIONS) {
+            tcp_server_result(arg, 0);
+            return ERR_OK;
+        }
+
+        // Send another buffer
+        return tcp_server_send_data(arg, state->client_pcb);
+    }
+    return ERR_OK;
+}
+
+err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb) {
+    DEBUG_printf("tcp_server_poll_fn\n");
+    return tcp_server_result(arg, -1); // no response is an error?
+}
+
+void tcp_server_err(void *arg, err_t err) {
+    if (err != ERR_ABRT) {
+        DEBUG_printf("tcp_client_err_fn %d\n", err);
+        tcp_server_result(arg, err);
+    }
+}
+
+err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+    if (err != ERR_OK || client_pcb == NULL) {
+        DEBUG_printf("Failure in accept\n");
+        tcp_server_result(arg, err);
+        return ERR_VAL;
+    }
+    DEBUG_printf("Client connected\n");
+
+    state->client_pcb = client_pcb;
+    tcp_arg(client_pcb, state);
+    tcp_sent(client_pcb, tcp_server_sent);
+    tcp_recv(client_pcb, tcp_server_recv);
+    tcp_poll(client_pcb, tcp_server_poll, POLL_TIME_S * 2);
+    tcp_err(client_pcb, tcp_server_err);
+
+    return tcp_server_send_data(arg, state->client_pcb);
+}
+
+bool tcp_server_open(void *arg) {
+    TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+    DEBUG_printf("Starting server at %s on port %u\n", ip4addr_ntoa(netif_ip4_addr(netif_list)), TCP_SERVER_PORT);
+
+    struct tcp_pcb *pcb = tcp_new_ip_type(IPADDR_TYPE_ANY);
+    if (!pcb) {
+        DEBUG_printf("failed to create pcb\n");
+        return false;
+    }
+
+    err_t err = tcp_bind(pcb, NULL, TCP_SERVER_PORT);
+    if (err) {
+        DEBUG_printf("failed to bind to port %u\n", TCP_SERVER_PORT);
+        return false;
+    }
+
+    state->server_pcb = tcp_listen_with_backlog(pcb, 1);
+    if (!state->server_pcb) {
+        DEBUG_printf("failed to listen\n");
+        if (pcb) {
+            tcp_close(pcb);
+        }
+        return false;
+    }
+
+    tcp_arg(state->server_pcb, state);
+    tcp_accept(state->server_pcb, tcp_server_accept);
+
+    return true;
+}
+
