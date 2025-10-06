@@ -44,6 +44,8 @@
         "pami_2026.h": "c",
         "compare": "c",
         "cstdint": "c",
-        "cstddef": "c"
+        "cstddef": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c"
     }
 }

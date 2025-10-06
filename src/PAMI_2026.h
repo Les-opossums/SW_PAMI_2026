@@ -25,6 +25,7 @@
 
 
 // include for web socket
+#include "tcp_server.h"
 #include "websocket.h"
 #include "lwipopts.h"
 #include "lwip/pbuf.h"
