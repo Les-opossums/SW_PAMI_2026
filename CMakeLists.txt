@@ -57,7 +57,8 @@ target_include_directories(PAMI_2026 PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(PAMI_2026 
-        pico_cyw43_arch_none
+                        pico_stdlib
+                        pico_cyw43_arch_lwip_threadsafe_background
         )
 
 pico_add_extra_outputs(PAMI_2026)
