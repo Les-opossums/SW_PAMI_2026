@@ -2,7 +2,7 @@
 
 void send_pose_to_foxglove(tcp_server_t *state, float x, float y, float theta) {
     if (!state || !state->client_pcb) return;
-    if (!state->connected) return;
+    if (!state->complete) return;
 
     char json[128];
     snprintf(json, sizeof(json),
