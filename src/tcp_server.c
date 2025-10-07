@@ -46,10 +46,10 @@ err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
 err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, const uint8_t *data, size_t len) {
     tcp_server_t *state = (tcp_server_t *)arg;
     
-    if (!state || !state->client_pcb || !state->complete) {
-        printf("[Sender] No client connected\n");
-        return ERR_VAL;
-    }
+    // if (!state || !state->client_pcb || !state->complete) {
+    //     printf("[Sender] No client connected\n");
+    //     return ERR_VAL;
+    // }
 
     if (len == 0) {
         printf("[Sender] Nothing to send\n");
@@ -69,6 +69,7 @@ err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, const uint8_t *data,
 
     // Protéger l'accès à lwIP
     cyw43_arch_lwip_begin();
+    cyw43_arch_lwip_check();
     err_t err = tcp_write(state->client_pcb, state->buffer_sent, len, TCP_WRITE_FLAG_COPY);
     if (err == ERR_OK) {
         err = tcp_output(state->client_pcb); // flush immédiat

@@ -50,7 +50,7 @@ int main()
             // send_pose_to_foxglove(server, x, y, theta);
 
             char msg[128];
-            snprintf(msg, sizeof(msg), "{\"x\":%.3f,\"y\":%.3f,\"theta\":%.3f}\n", x, y, theta);
+            snprintf(msg, sizeof(msg), "{\"x\":%.3f,\"y\":%.3f,\"theta\":%.3f}\n\0", x, y, theta);
             tcp_server_send_data(server, server->client_pcb, (uint8_t *)msg, strlen(msg));
 
             // simulation d’évolution
