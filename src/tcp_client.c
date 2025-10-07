@@ -127,7 +127,7 @@ err_t connect_client(void *arg) {
 TCP_CLIENT_T* tcp_client_init(void) {
     TCP_CLIENT_T *state = calloc(1, sizeof(TCP_CLIENT_T));
     if (!state) {
-        DEBUG_printf("failed to allocate state\n");
+        printf("failed to allocate state\n");
         return NULL;
     }
     return state;

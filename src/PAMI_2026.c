@@ -11,27 +11,25 @@ int main()
     printf("PAMI-2026 ready.\n");
 
     char ssid[] = "Opossum";           // your network SSID (name)
-    char password[] = "xxxx";       // your network password
+    char password[] = "r28w3fr7j3zu8r4";       // your network password
 
+    // Initialise la puce CYW43 (WiFi + Bluetooth)
     if (cyw43_arch_init_with_country(CYW43_COUNTRY_FRANCE)) {
         printf("failed to initialise\n");
         return 1;
     }
-
+    
     cyw43_arch_enable_sta_mode();
 
     if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
         printf("wifi connection failed\n");
         return 1;
     }
+    printf("IP address: %s\n", ip4addr_ntoa(netif_ip4_addr(netif_default)));
 
-    TCP_SERVER_T *server = tcp_server_init();
-    if (!server) {
-        printf("failed to create server\n");
-        return 1;
-    }
-    if (!tcp_server_open(server)) {
-        printf("failed to open server\n");
+    tcp_server_t *server = NULL;
+    if (!tcp_server_open(&server)) {
+        printf("Failed to start TCP server.\n");
         return 1;
     }
 
