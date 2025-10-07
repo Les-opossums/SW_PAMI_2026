@@ -2,6 +2,8 @@
 
 tcp_server_t *tcp_server_init(void) {
     tcp_server_t *state = calloc(1, sizeof(tcp_server_t));
+    state->can_send = false;
+    state->is_connected = false;
     if (!state) {
         DEBUG_printf("Failed to allocate tcp_server_t\n");
         return NULL;
@@ -20,6 +22,8 @@ err_t tcp_server_close(void *arg) {
         tcp_sent(state->client_pcb, NULL);
         tcp_recv(state->client_pcb, NULL);
         tcp_err(state->client_pcb, NULL);
+        state->can_send = false;
+        state->is_connected = false;
         err = tcp_close(state->client_pcb);
         if (err != ERR_OK) {
             printf("TCP close failed (%d), aborting\n", err);
@@ -40,40 +44,27 @@ err_t tcp_server_close(void *arg) {
 
 err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
     tcp_server_t *state = (tcp_server_t *)arg;
+    state->can_send = true;
     return ERR_OK;
 }
 
-err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, const uint8_t *data, size_t len) {
-    tcp_server_t *state = (tcp_server_t *)arg;
-    
-    // if (!state || !state->client_pcb || !state->complete) {
-    //     printf("[Sender] No client connected\n");
-    //     return ERR_VAL;
-    // }
-
-    if (len == 0) {
-        printf("[Sender] Nothing to send\n");
+err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len) {
+    if (!state || !state->client_pcb || !state->is_connected) {
+        printf("[Sender] No client connected\n");
         return ERR_VAL;
     }
 
-    if (len > TCP_SERVER_BUF_SIZE) {
-        printf("[Sender] Data too large to send (%zu bytes)\n", len);
+    if (len == 0 || len > TCP_SERVER_BUF_SIZE) {
+        printf("[Sender] Invalid length %zu\n", len);
         return ERR_VAL;
     }
 
-    memset(state->buffer_sent, 0, TCP_SERVER_BUF_SIZE);
     memcpy(state->buffer_sent, data, len);
     state->sent_len = len;
 
-    printf("[Sender] Writing %d bytes to client\n", len);
-
-    // Protéger l'accès à lwIP
     cyw43_arch_lwip_begin();
-    cyw43_arch_lwip_check();
     err_t err = tcp_write(state->client_pcb, state->buffer_sent, len, TCP_WRITE_FLAG_COPY);
-    if (err == ERR_OK) {
-        err = tcp_output(state->client_pcb); // flush immédiat
-    }
+    if (err == ERR_OK) err = tcp_output(state->client_pcb);
     cyw43_arch_lwip_end();
 
     if (err != ERR_OK) {
@@ -84,12 +75,15 @@ err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, const uint8_t *data,
 }
 
 
+
 err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     tcp_server_t *state = (tcp_server_t *)arg;
 
     if (!p) { // Connection closed by client
+        state->is_connected = false;
+        state->client_pcb = NULL;
+        tcp_close(tpcb);
         printf("Client disconnected\n");
-        // tcp_close_client_by_index();
         pbuf_free(p);
         return ERR_VAL;
     }
@@ -146,6 +140,8 @@ err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
 
     printf("Client connected\n");
     state->client_pcb = client_pcb;
+    state->is_connected = true;
+    state->can_send = true;
 
     tcp_arg(client_pcb, state);
     tcp_sent(client_pcb, tcp_server_sent);

@@ -18,12 +18,15 @@ typedef struct {
     int sent_len;
     int recv_len;
     int run_count;
+
+    bool can_send;
+    bool is_connected;
 } tcp_server_t;
 
 tcp_server_t* tcp_server_init(void);
 err_t tcp_server_close(void *arg);
 err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len);
-err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, const uint8_t *data, size_t len);
+err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len);
 err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb);
 void tcp_server_err(void *arg, err_t err);
