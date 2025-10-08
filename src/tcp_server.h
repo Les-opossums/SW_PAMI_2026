@@ -31,6 +31,6 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
 err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb);
 void tcp_server_err(void *arg, err_t err);
 err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err);
-bool tcp_server_open(void *arg);
+tcp_server_t* tcp_server_open(void);
 
 #endif // TCP_SERVER_H

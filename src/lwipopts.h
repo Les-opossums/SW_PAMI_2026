@@ -87,4 +87,12 @@
 #define SLIP_DEBUG                  LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
 
+
+// Increase the number of available TCP Protocol Control Blocks (PCBs)
+// The default is often too low (e.g., 5). Let's set it higher.
+#define MEMP_NUM_TCP_PCB 10
+
+// Ensure we have at least one listening PCB
+#define MEMP_NUM_TCP_PCB_LISTEN 8
+
 #endif /* __LWIPOPTS_H__ */

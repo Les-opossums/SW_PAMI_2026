@@ -27,10 +27,10 @@ int main()
     }
     printf("IP address: %s\n", ip4addr_ntoa(netif_ip4_addr(netif_default)));
 
-    tcp_server_t *server = NULL;
-    if (!tcp_server_open(&server)) {
-        printf("Failed to start TCP server.\n");
-        return 1;
+    tcp_server_t *server = tcp_server_open(); 
+    if (!server) {
+        printf("Failed to start TCP server\n");
+        while(1); // Halt
     }
 
     uint32_t tcp_timer = to_ms_since_boot(get_absolute_time());
