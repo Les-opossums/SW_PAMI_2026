@@ -98,42 +98,127 @@ err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len)
 
 
 
+// err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+//     tcp_server_t *state = (tcp_server_t *)arg;
+
+//     if (!p) { // Connection closed by client
+//         printf("Client DISCONNECTED. Setting is_connected = false\n");
+//         state->is_connected = false;
+//         state->client_pcb = NULL;
+//         tcp_close(tpcb);
+//         printf("Client disconnected\n");
+//         // pbuf_free(p);
+//         return ERR_OK;
+//     }
+
+//     cyw43_arch_lwip_check();
+
+//     if (p->tot_len > 0) {
+//         const uint16_t buffer_left = TCP_SERVER_BUF_SIZE - state->recv_len;
+//         state->recv_len = pbuf_copy_partial(p, state->buffer_recv, sizeof(state->buffer_recv) - 1, 0);
+//         state->buffer_recv[state->recv_len] = '\0'; // Null-terminate for printing
+//         tcp_recved(tpcb, p->tot_len);
+//     }
+
+//     // traitement des données reçues print dans le terminal
+//     DEBUG_printf("Received %d bytes from client\n", p->tot_len);
+//     DEBUG_printf("Data: ");
+//     for (int i = 0; i < p->tot_len; i++) {
+//         char c = state->buffer_recv[i];
+//         // On remplace les caractères non imprimables par un point
+//         if (c >= 32 && c <= 126) {
+//             DEBUG_printf("%c", c);
+//         } else {
+//             DEBUG_printf(".");
+//         }
+//     }
+//     DEBUG_printf("\n");
+
+//     pbuf_free(p);
+
+//     return ERR_OK;
+// }
+
 err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     tcp_server_t *state = (tcp_server_t *)arg;
 
-    if (!p) { // Connection closed by client
-        printf("Client DISCONNECTED. Setting is_connected = false\n");
+    if (!p) { // Connection closed
+        printf("Client disconnected.\n");
         state->is_connected = false;
+        state->complete = false; // Reset handshake state
         state->client_pcb = NULL;
-        tcp_close(tpcb);
-        printf("Client disconnected\n");
-        // pbuf_free(p);
+        // The PCB is already being closed by lwIP, just return OK
         return ERR_OK;
     }
 
     cyw43_arch_lwip_check();
 
-    if (p->tot_len > 0) {
-        const uint16_t buffer_left = TCP_SERVER_BUF_SIZE - state->recv_len;
-        state->recv_len = pbuf_copy_partial(p, state->buffer_recv, sizeof(state->buffer_recv) - 1, 0);
-        state->buffer_recv[state->recv_len] = '\0'; // Null-terminate for printing
+    // If the handshake is already done, we can ignore incoming messages for now
+    if (state->complete) {
         tcp_recved(tpcb, p->tot_len);
+        pbuf_free(p);
+        return ERR_OK;
     }
 
-    // traitement des données reçues print dans le terminal
-    DEBUG_printf("Received %d bytes from client\n", p->tot_len);
-    DEBUG_printf("Data: ");
-    for (int i = 0; i < p->tot_len; i++) {
-        char c = state->buffer_recv[i];
-        // On remplace les caractères non imprimables par un point
-        if (c >= 32 && c <= 126) {
-            DEBUG_printf("%c", c);
-        } else {
-            DEBUG_printf(".");
+    // --- WEBSOCKET HANDSHAKE LOGIC ---
+    if (p->tot_len > 0 && !state->complete) {
+        // Copy received data into a null-terminated buffer
+        pbuf_copy_partial(p, state->buffer_recv, sizeof(state->buffer_recv) - 1, 0);
+        state->buffer_recv[p->tot_len] = '\0';
+
+        // Find the WebSocket key from the client's request header
+        char *key_start = strstr((char*)state->buffer_recv, "Sec-WebSocket-Key: ");
+        if (key_start) {
+            key_start += 19; // Move pointer past "Sec-WebSocket-Key: "
+            char *key_end = strstr(key_start, "\r\n");
+            if (key_end) {
+                // Extract the key
+                char client_key[128];
+                size_t key_len = key_end - key_start;
+                memcpy(client_key, key_start, key_len);
+                client_key[key_len] = '\0';
+                
+                // Append the WebSocket magic string
+                const char *magic_string = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+                strcat(client_key, magic_string);
+
+                // Calculate SHA-1 hash
+                unsigned char sha1_hash[20];
+                mbedtls_sha1((const unsigned char*)client_key, strlen(client_key), sha1_hash);
+
+                // Base64 encode the SHA-1 hash
+                unsigned char base64_accept_key[40];
+                size_t encoded_len;
+                mbedtls_base64_encode(base64_accept_key, sizeof(base64_accept_key), &encoded_len, sha1_hash, sizeof(sha1_hash));
+                base64_accept_key[encoded_len] = '\0';
+
+                // Formulate the HTTP 101 Switching Protocols response
+                char response[256];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 101 Switching Protocols\r\n"
+                         "Upgrade: websocket\r\n"
+                         "Connection: Upgrade\r\n"
+                         "Sec-WebSocket-Accept: %s\r\n"
+                         "Sec-WebSocket-Version: 13\r\n"
+                         "\r\n",
+                         base64_accept_key);
+                
+                // Send the handshake response
+                cyw43_arch_lwip_begin();
+                err_t write_err = tcp_write(tpcb, response, strlen(response), TCP_WRITE_FLAG_COPY);
+                if (write_err == ERR_OK) {
+                    tcp_output(tpcb);
+                    printf("WebSocket handshake complete!\n");
+                    state->complete = true; // Handshake is now complete!
+                } else {
+                    printf("Failed to send handshake response: %d\n", write_err);
+                }
+                cyw43_arch_lwip_end();
+            }
         }
     }
-    DEBUG_printf("\n");
 
+    tcp_recved(tpcb, p->tot_len);
     pbuf_free(p);
 
     return ERR_OK;

@@ -33,6 +33,9 @@
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
 
+#include "mbedtls/sha1.h"
+#include "mbedtls/base64.h"
+
 #define Abs_Ternaire(a)   (((a)<0)?(-a):(a))
 #define Min_Ternaire(a,b) (((a)<(b))?(a):(b))
 #define Max_Ternaire(a,b) (((a)>(b))?(a):(b))

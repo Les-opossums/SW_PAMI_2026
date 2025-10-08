@@ -44,14 +44,31 @@ int main()
         int c;
         cyw43_arch_poll();
         // Toutes les secondes
-        if ((Timer_ms1 - tcp_timer) > 1000) {
+        // if ((Timer_ms1 - tcp_timer) > 1000) {
             
-            printf("client_pcb=%p, can_send=%d\n", server->client_pcb, server->can_send);  
-            // send_pose_to_foxglove(server, x, y, theta);
+        //     printf("client_pcb=%p, can_send=%d\n", server->client_pcb, server->can_send);  
+        //     // send_pose_to_foxglove(server, x, y, theta);
 
-            char msg[128];
-            snprintf(msg, sizeof(msg), "{\"x\":%.3f,\"y\":%.3f,\"theta\":%.3f}\n\0", x, y, theta);
-            tcp_server_send_data(server, (uint8_t*)msg, strlen(msg));
+        //     char msg[128];
+        //     snprintf(msg, sizeof(msg), "{\"x\":%.3f,\"y\":%.3f,\"theta\":%.3f}\n\0", x, y, theta);
+        //     tcp_server_send_data(server, (uint8_t*)msg, strlen(msg));
+
+        //     // simulation d’évolution
+        //     x += 0.05f;
+        //     theta += 0.01f;
+
+        //     tcp_timer = to_ms_since_boot(get_absolute_time());
+        // }
+        if ((Timer_ms1 - tcp_timer) > 1000) {
+
+            printf("client_pcb=%p, is_handshake_complete=%d\n", server->client_pcb, server->complete);
+
+            // char msg[128];
+            // snprintf(msg, sizeof(msg), "{\"x\":%.3f,\"y\":%.3f,\"theta\":%.3f}\n\0", x, y, theta);
+            // tcp_server_send_data(server, (uint8_t*)msg, strlen(msg));
+            
+            // NEW: Call the Foxglove sender function
+            send_pose_to_foxglove(server, x, y, theta);
 
             // simulation d’évolution
             x += 0.05f;
