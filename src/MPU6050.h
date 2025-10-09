@@ -440,6 +440,8 @@ extern "C"
      */
     void mpu6050_set_free_fall_detection_duration(struct mpu6050 *self, uint8_t duration);
 
+    void read_raw_accel(struct mpu6050 *self);
+    void read_raw_gyro(struct mpu6050 *self);
 #ifdef __cplusplus
 }
 #endif

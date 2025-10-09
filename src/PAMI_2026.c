@@ -48,20 +48,11 @@ int main()
     gpio_pull_up(IMU_I2C_SDA);
     gpio_pull_up(IMU_I2C_SCL);
 
-    sleep_ms(2000); // give time for USB to connect
-    printf("Starting I2C scan...\n");
-    // for (uint8_t addr = 1; addr < 127; addr++) {
-    //     // Dummy write, no data, just check for ACK
-    //     uint8_t rxdata;
-    //     int result = i2c_read_blocking(i2c1   , addr, &rxdata, 1, false);
-    //     if (result >= 0) {
-    //         printf("✅ Found device at 0x%02X\n", addr);
-    //     }
-    // }
-    // printf("Scan complete.\n");
-
-    // while(1);
     mpu6050_t mpu6050 = mpu6050_init(i2c1, 0x68);
+
+    mpu6050_set_accelerometer_measuring(&mpu6050, 1);
+    mpu6050_set_gyroscope_measuring(&mpu6050, 1);
+
 
 
     if (mpu6050_begin(&mpu6050))
@@ -99,6 +90,11 @@ int main()
         }
     }
 
+    // Calibrate gyro. Make sure the IMU is completely still.
+    mpu6050_calibrate_gyro_on_startup(&mpu6050, 1000);
+    // Calibrate accelerometer. Make sure the IMU is completely still and flat.
+    mpu6050_calibrate_accel_on_startup(&mpu6050, 1000);
+
     while (true) {
         Timer_Update(); // Met à jour les timers
         int c;
@@ -117,7 +113,7 @@ int main()
         float tempF = mpu6050_get_temperature_f(&mpu6050);
 
         // Print all the measurements
-        printf("Accelerometer: %f, %f, %f \n", accel->x, accel->y, accel->z);
+        printf("Accelerometer: %f, %f, %f, Gyroscope: %f, %f, %f\n", accel->x, accel->y, accel->z, gyro->x, gyro->y, gyro->z);
 
         // Print all motion interrupt flags
         // printf("Overflow: %d - Freefall: %d - Inactivity: %d, Activity: %d, DataReady: %d\n",

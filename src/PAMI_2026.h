@@ -8,7 +8,7 @@
 #include <math.h>
 
 #include "hardware/uart.h"
-
+#include "hardware/i2c.h"
 
 #include "PAMI_2026_IO.h"
 
@@ -37,8 +37,8 @@
 #include "mbedtls/base64.h"
 
 //MPU6050
-#include "hardware/i2c.h"
 #include "MPU6050.h"
+#include "IMU.h"
 
 
 #define Abs_Ternaire(a)   (((a)<0)?(-a):(a))
