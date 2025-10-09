@@ -36,6 +36,11 @@
 #include "mbedtls/sha1.h"
 #include "mbedtls/base64.h"
 
+//MPU6050
+#include "hardware/i2c.h"
+#include "MPU6050.h"
+
+
 #define Abs_Ternaire(a)   (((a)<0)?(-a):(a))
 #define Min_Ternaire(a,b) (((a)<(b))?(a):(b))
 #define Max_Ternaire(a,b) (((a)>(b))?(a):(b))
