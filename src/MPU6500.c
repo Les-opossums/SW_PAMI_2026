@@ -1,7 +1,6 @@
-// mpu6500.c
+#include "PAMI_2026.h"
 
-#include "mpu6500.h"
-#include <stdio.h>
+mpu6500_t mpu6500;
 
 // Static helper functions for I2C communication
 static void i2c_write_reg_byte(i2c_inst_t *i2c, uint8_t addr, uint8_t reg, uint8_t value) {
@@ -32,6 +31,26 @@ void mpu6500_init(mpu6500_t *mpu, i2c_inst_t *i2c, uint8_t address) {
     mpu->accel_offset.x = 0;
     mpu->accel_offset.y = 0;
     mpu->accel_offset.z = 0;
+
+    gpio_init(IMU_I2C_SDA);
+    gpio_init(IMU_I2C_SCL);
+    i2c_init(i2c1, 400000); // 400kHz
+
+    gpio_set_function(IMU_I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(IMU_I2C_SCL, GPIO_FUNC_I2C);
+    // Don't forget the pull ups! | Or use external ones
+    gpio_pull_up(IMU_I2C_SDA);
+    gpio_pull_up(IMU_I2C_SCL);
+
+    // Attempt to begin communication with the MPU-6500
+    if (!mpu6500_begin(mpu)) {
+        printf("Failed to initialize MPU-6500. Halting.\n");
+        while (1); // Loop forever if initialization fails
+    }
+
+    mpu6500_calibrate_gyro(mpu, 100); // Calibrate using 100 samples
+    mpu6500_calibrate_accel(mpu, 100); // Calibrate using 100 samples
+    printf("Calibration finished. Starting main loop.\n\n");
 }
 
 bool mpu6500_begin(mpu6500_t *mpu) {
@@ -170,4 +189,164 @@ void mpu6500_calibrate_accel(mpu6500_t *mpu, uint16_t num_samples) {
     mpu->accel_offset.y = (int16_t)(accel_y_sum / num_samples);
     mpu->accel_offset.z = (int16_t)(accel_z_sum / num_samples);
     printf("Calibration complete. Raw bias: X=%d, Y=%d, Z=%d\n", mpu->accel_offset.x, mpu->accel_offset.y, mpu->accel_offset.z);
+}
+
+void mpu6500_odometry_init(mpu6500_t *mpu)
+{
+    mpu->odom.x = 0.0f;
+    mpu->odom.y = 0.0f;
+    mpu->odom.theta = 0.0f;
+
+    mpu->odom.vx = 0.0f;
+    mpu->odom.vy = 0.0f;
+    mpu->odom.wz = 0.0f;
+
+    mpu->odom.cumul_vx = 0.0f;
+    mpu->odom.cumul_vy = 0.0f;
+    mpu->odom.cumul_wz = 0.0f;
+
+    mpu->odom.accel_bias_x = 0.0f;
+    mpu->odom.accel_bias_y = 0.0f;
+    mpu->odom.gyro_bias_z = 0.0f;
+
+    mpu->odom.speed_last_time_us = 0;
+    mpu->odom.position_last_time_us = 0;
+
+    mpu->odom.speed_update_counter = 0;
+}
+
+void mpu6500_odometry_speed_update(mpu6500_odometry_t *odom, mpu6500_t *mpu, uint64_t current_time_us)
+{
+    // printf("Speed update called.\n");
+    // float dt = (current_time_us - odom->speed_last_time_us) / 1e6f;
+    // odom->speed_last_time_us = current_time_us;
+    float dt = 0.001f;
+
+    if (dt <= 0.0f || dt > 0.1f) return; // safety against large time steps
+
+    // --- Read IMU ---
+    mpu6500_float_data_t accel_data;
+    mpu6500_float_data_t gyro_data;
+    mpu6500_get_accel_g(mpu, &accel_data);
+    mpu6500_get_gyro_dps(mpu, &gyro_data);
+    // --- Gyro integration ---
+    odom->wz = (gyro_data.z - odom->gyro_bias_z) * (3.14159265f / 180.0f);
+
+    // --- Convert accel to m/s² ---
+    float ax = accel_data.x * 9.81f;
+    float ay = accel_data.y * 9.81f;
+
+    // printf("accel: ax=%.2f g, ay=%.2f g | gyro: wz=%.2f dps\n", accel_data.x, accel_data.y, gyro_data.z);
+
+    // --- Online accelerometer bias estimation ---
+    // If acceleration magnitude is small, consider it bias and slowly adapt
+    // float acc_mag = sqrtf(ax * ax + ay * ay);
+    // if (acc_mag < 0.5f) {
+    //     // Convert accel_data to m/s² before updating bias
+    //     float ax_m_s2 = accel_data.x * 9.81f;
+    //     float ay_m_s2 = accel_data.y * 9.81f;
+
+    //     odom->accel_bias_x = (1.0f - BIAS_FILTER_ALPHA) * odom->accel_bias_x + BIAS_FILTER_ALPHA * ax_m_s2;
+    //     odom->accel_bias_y = (1.0f - BIAS_FILTER_ALPHA) * odom->accel_bias_y + BIAS_FILTER_ALPHA * ay_m_s2;
+    // }
+
+    // printf("Accel bias: bx=%.4f g, by=%.4f g\n", odom->accel_bias_x, odom->accel_bias_y);
+
+    // Subtract bias
+    // ax -= odom->accel_bias_x * 9.81f;
+    // ay -= odom->accel_bias_y * 9.81f;
+
+    // --- Velocity integration in body frame ---
+    odom->vx += ax * dt;
+    odom->vy += ay * dt;
+
+    // --- Velocity damping if acceleration is small ---
+    float lin_acc = sqrtf(ax * ax + ay * ay);
+    if (lin_acc < ACC_THRESHOLD) {
+        odom->vx *= VEL_DECAY;
+        odom->vy *= VEL_DECAY;
+    }
+
+    // --- Cumulative velocities for position update ---
+    odom->cumul_vx += odom->vx;
+    odom->cumul_vy += odom->vy;
+    odom->cumul_wz += odom->wz;
+}
+
+void mpu6500_odometry_position_update(mpu6500_odometry_t *odom, uint64_t current_time_us)
+{
+    // float dt = (current_time_us - odom->position_last_time_us) / 1e6f; // Convert microseconds to seconds
+    // odom->position_last_time_us = current_time_us;
+    float dt = 0.001f;
+    
+    float vx = odom->cumul_vx / ODO_POS_EVERY_SPEED;
+    float vy = odom->cumul_vy / ODO_POS_EVERY_SPEED;
+    float wz = odom->cumul_wz / ODO_POS_EVERY_SPEED;
+
+    // Reset cumulative sums
+    odom->cumul_vx = 0.0f;
+    odom->cumul_vy = 0.0f;
+    odom->cumul_wz = 0.0f;
+    
+    // Rotation matrix from body to world
+    float dx_local = vx * (dt * ODO_POS_EVERY_SPEED);
+    float dy_local = vy * (dt * ODO_POS_EVERY_SPEED);
+    float dz_local = wz * (dt * ODO_POS_EVERY_SPEED);
+
+    float cos_t = cosf(odom->theta);
+    float sin_t = sinf(odom->theta);
+
+    float dx_w = cos_t * dx_local - sin_t * dy_local;
+    float dy_w = sin_t * dx_local + cos_t * dy_local;
+
+    odom->x += dx_w;
+    odom->y += dy_w;
+    odom->theta += dz_local;
+
+    // Normalize theta to [-pi, pi]
+    if (odom->theta > M_PI) odom->theta -= 2.0f * M_PI;
+    else if (odom->theta < -M_PI) odom->theta += 2.0f * M_PI;
+}
+
+int state_imu_odo = 0;
+uint64_t imu_timer = 0;
+
+void imu_odo_loop(mpu6500_t *mpu)
+{
+    switch (state_imu_odo) {
+        case 0:
+            if (Timer_ms1 - imu_timer >= 1) { // 1000 Hz
+                imu_timer = Timer_ms1;
+                mpu6500_odometry_speed_update(&mpu->odom, mpu, time_us_64());
+                // printf("Speed: vx=%.2f m/s, vy=%.2f m/s, wz=%.2f rad/s\n", mpu->odom.vx, mpu->odom.vy, mpu->odom.wz);
+                if (mpu->odom.speed_update_counter < ODO_POS_EVERY_SPEED) {
+                    mpu->odom.speed_update_counter++;
+                }else {
+                    mpu->odom.speed_update_counter = 0; // Cap counter
+                    state_imu_odo++;
+                }
+            }
+            break;
+        case 1:
+            mpu6500_odometry_position_update(&mpu->odom, time_us_64());
+            printf("Odometry: X=%.2f m, Y=%.2f m, Theta=%.2f rad\n", mpu->odom.x, mpu->odom.y, mpu->odom.theta);
+            state_imu_odo++;
+            break;
+        default:
+            state_imu_odo = 0;
+            break;
+    }
+}
+
+
+void reset_odometer_position(mpu6500_t *mpu)
+{
+    mpu->odom.x = 0.0f;
+    mpu->odom.y = 0.0f;
+    mpu->odom.theta = 0.0f;
+}
+
+uint8_t SET0_imu_cmd(void) {
+    reset_odometer_position(&mpu6500);
+    return 0;
 }

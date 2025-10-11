@@ -10,6 +10,7 @@
 #include "hardware/uart.h"
 #include "hardware/i2c.h"
 
+// definition of the IOs
 #include "PAMI_2026_IO.h"
 
 #include "Timer.h"

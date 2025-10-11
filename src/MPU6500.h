@@ -58,6 +58,14 @@
 #define MPU6500_REG_PWR_MGMT_1      0x6B
 #define MPU6500_REG_WHO_AM_I        0x75
 
+
+
+#define VEL_DECAY           0.95f      // velocity damping factor per update when stationary
+#define ACC_THRESHOLD       0.05f      // m/s²
+#define BIAS_FILTER_ALPHA   0.005f     // low-pass for bias estimation
+#define ODO_POS_EVERY_SPEED 5          
+
+
 // Enum for Gyroscope Full Scale Range
 typedef enum {
     GYRO_FS_250_DPS = 0,
@@ -90,6 +98,29 @@ typedef struct {
     float x, y, z;
 } mpu6500_float_data_t;
 
+typedef struct {
+    float x;      // position in world frame (m)
+    float y;
+    float theta;  // yaw angle (rad)
+
+    float vx;     // velocity in body frame (m/s)
+    float vy;
+    float wz;     // angular velocity in rad/s
+
+    float cumul_vx; // cumulative velocity
+    float cumul_vy;
+    float cumul_wz;
+
+    float accel_bias_x;
+    float accel_bias_y;
+    float gyro_bias_z;
+
+    uint64_t speed_last_time_us;
+    uint64_t position_last_time_us;
+
+    uint32_t speed_update_counter;
+} mpu6500_odometry_t;
+
 // Main device structure
 typedef struct {
     i2c_inst_t *i2c_instance;
@@ -104,7 +135,14 @@ typedef struct {
 
     float accel_scaler;
     float gyro_scaler;
+
+    mpu6500_odometry_t odom;
 } mpu6500_t;
+
+
+
+extern mpu6500_t mpu6500;
+
 
 /**
  * @brief Initializes the MPU-6500 sensor.
@@ -182,4 +220,29 @@ void mpu6500_calibrate_gyro(mpu6500_t *mpu, uint16_t num_samples);
  * @param num_samples The number of readings to average for calibration. (e.g., 200)
  */
 void mpu6500_calibrate_accel(mpu6500_t *mpu, uint16_t num_samples);
+
+/**
+ * @brief Initializes the odometry structure.
+ *
+ * @param odom Pointer to the mpu6500_odometry_t struct.
+ */
+void mpu6500_odometry_init(mpu6500_t *mpu);
+
+/**
+ * @brief Updates the odometry based on accelerometer and gyroscope data.
+ *
+ * @param odom Pointer to the mpu6500_odometry_t struct.
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param current_time_us Current time in microseconds.
+ */
+void mpu6500_odometry_speed_update(mpu6500_odometry_t *odom, mpu6500_t *mpu, uint64_t current_time_us);
+
+
+void mpu6500_odometry_position_update(mpu6500_odometry_t *odom, uint64_t current_time_us);
+
+void imu_odo_loop(mpu6500_t *mpu);
+
+
+void reset_odometer_position(mpu6500_t *mpu);
+
 #endif // MPU6500_H
