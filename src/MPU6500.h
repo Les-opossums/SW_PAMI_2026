@@ -106,16 +106,65 @@ typedef struct {
     float gyro_scaler;
 } mpu6500_t;
 
-// Function Prototypes
+/**
+ * @brief Initializes the MPU-6500 sensor.
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param i2c Pointer to the I2C instance.
+ * @param address I2C address of the MPU-6500.
+ */
 void mpu6500_init(mpu6500_t *mpu, i2c_inst_t *i2c, uint8_t address);
+
+/** 
+ * @brief Initializes communication with the MPU-6500 and configures default settings.
+ */
 bool mpu6500_begin(mpu6500_t *mpu);
+
+/**
+ * @brief Sets the gyroscope full-scale range.
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param scale Desired gyroscope full-scale range.
+ */
 void mpu6500_set_gyro_scale(mpu6500_t *mpu, mpu6500_gyro_fs_t scale);
+
+/**
+ * @brief Sets the accelerometer full-scale range.
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param range Desired accelerometer full-scale range.
+ */
 void mpu6500_set_accel_range(mpu6500_t *mpu, mpu6500_accel_fs_t range);
+
+/**
+ * @brief Reads raw sensor data from the MPU-6500.
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ */
 void mpu6500_read_raw(mpu6500_t *mpu);
 
-// Data conversion functions
+/**
+ * @brief Converts raw accelerometer data to g's.
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param data Pointer to mpu6500_float_data_t struct to store converted data.
+ */
 void mpu6500_get_accel_g(mpu6500_t *mpu, mpu6500_float_data_t *data);
+
+/**
+ * @brief Converts raw gyroscope data to degrees per second (dps).
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param data Pointer to mpu6500_float_data_t struct to store converted data.
+ */
 void mpu6500_get_gyro_dps(mpu6500_t *mpu, mpu6500_float_data_t *data);
+
+/**
+ * @brief Converts raw temperature data to degrees Celsius.
+ *
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @return Temperature in degrees Celsius.
+ */
 float mpu6500_get_temp_c(mpu6500_t *mpu);
 
 /**
@@ -125,5 +174,12 @@ float mpu6500_get_temp_c(mpu6500_t *mpu);
  * @param num_samples The number of readings to average for calibration. (e.g., 200)
  */
 void mpu6500_calibrate_gyro(mpu6500_t *mpu, uint16_t num_samples);
+
+/**
+ * @brief Calibrates the accelerometer by calculating and setting hardware offsets.
+ * @note The sensor MUST be stationary on a flat surface during calibration.
+ * @param mpu Pointer to the mpu6500_t struct.
+ * @param num_samples The number of readings to average for calibration. (e.g., 200)
+ */
 void mpu6500_calibrate_accel(mpu6500_t *mpu, uint16_t num_samples);
 #endif // MPU6500_H
