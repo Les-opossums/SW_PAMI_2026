@@ -209,6 +209,9 @@ void mpu6500_odometry_init(mpu6500_t *mpu)
     mpu->odom.g_est_y = 0.0f;
     mpu->odom.g_est_z = 0.0f;
 
+    mpu->odom.pitch = 0.0f;
+    mpu->odom.roll = 0.0f;
+
     mpu->odom.accel_bias_x = 0.0f;
     mpu->odom.accel_bias_y = 0.0f;
     mpu->odom.gyro_bias_z = 0.0f;
@@ -219,84 +222,118 @@ void mpu6500_odometry_init(mpu6500_t *mpu)
     mpu->odom.speed_update_counter = 0;
 }
 
-void mpu6500_odometry_speed_update(mpu6500_odometry_t *odom, mpu6500_t *mpu, uint64_t current_time_us)
+void mpu6500_odometry_speed_update(mpu6500_t *mpu, uint64_t current_time_us)
 {
-    // printf("Speed update called.\n");
+    mpu6500_odometry_t *odom = &mpu->odom;
+
+    // 1. Calculate time delta (dt) in seconds.
     float dt = (current_time_us - odom->speed_last_time_us) / 1e6f;
     odom->speed_last_time_us = current_time_us;
 
-    if (dt <= 0.0f || dt > 0.1f) return; // safety against large time steps
+    // Safety check for valid time step
+    if (dt <= 0.0f || dt > 0.1f) {
+        return;
+    }
 
-    // --- Read IMU ---
+    // 2. Get calibrated sensor data.
     mpu6500_float_data_t accel_data;
     mpu6500_float_data_t gyro_data;
     mpu6500_get_accel_g(mpu, &accel_data);
     mpu6500_get_gyro_dps(mpu, &gyro_data);
 
-    // --- Gyro integration ---
-    odom->wz = (gyro_data.z - odom->gyro_bias_z) * (3.14159265f / 180.0f);
+    // 3. Attitude Estimation via Complementary Filter
+    //  a) Integrate gyro data for a fast, short-term estimate of orientation.
+    //     NOTE: The sign of gy_rad might need to be flipped depending on your IMU's axis orientation.
+    
+    float gyro_rad_x = gyro_data.x * (M_PI / 180.0f); // Convert dps to rad/s
+    float gyro_rad_y = gyro_data.y * (M_PI / 180.0f);
+    float gyro_rad_z = gyro_data.z * (M_PI / 180.0f);
 
-    // --- Gravity estimation (low-pass) ---
-    const float alpha = 0.01f; // adjust for smoothness
-    odom->g_est_x = (1.0f - alpha) * odom->g_est_x + alpha * accel_data.x;
-    odom->g_est_y = (1.0f - alpha) * odom->g_est_y + alpha * accel_data.y;
-    odom->g_est_z = (1.0f - alpha) * odom->g_est_z + alpha * accel_data.z;
+    odom->pitch += gyro_rad_x * dt;
+    odom->roll  -= gyro_rad_y * dt;
 
-    // --- Remove gravity from raw acceleration ---
-    float ax_corr = (accel_data.x - odom->g_est_x) * 9.81f;
-    float ay_corr = (accel_data.y - odom->g_est_y) * 9.81f;
+    float ax = accel_data.x * G_ACCEL;
+    float ay = accel_data.y * G_ACCEL;
+    float az = accel_data.z * G_ACCEL;
 
-    // --- Velocity integration in body frame ---
-    float lin_acc = sqrtf(ax_corr * ax_corr + ay_corr * ay_corr);
-    // Only integrate if acceleration is meaningful
-    if (lin_acc > 0.05f) {
-        odom->vx += ax_corr * dt;
-        odom->vy += ay_corr * dt;
-    } else {
-        // Optional damping to reduce drift
-        odom->vx *= 0.98f;
-        odom->vy *= 0.98f;
+    //  b) Calculate long-term orientation from the accelerometer (which way is "down").
+    float pitch_accel = atan2f(ax, sqrtf(ay * ay + az * az));
+    float roll_accel  = atan2f(-ay, -az);
+
+    //  c) Fuse the two estimates.
+    odom->pitch = COMPLEMENTARY_FILTER_ALPHA * odom->pitch + (1.0f - COMPLEMENTARY_FILTER_ALPHA) * pitch_accel;
+    odom->roll  = COMPLEMENTARY_FILTER_ALPHA * odom->roll  + (1.0f - COMPLEMENTARY_FILTER_ALPHA) * roll_accel;
+
+    // 4. Gravity Compensation
+    //  Use the estimated attitude to calculate and remove the gravity component.
+    float gravity_comp_x =  G_ACCEL * sinf(odom->pitch);
+    float gravity_comp_y = -G_ACCEL * sinf(odom->roll) * cosf(odom->pitch);
+
+    float linear_ax = ax - gravity_comp_x;
+    float linear_ay = ay - gravity_comp_y;
+
+    // 5. Integrate corrected acceleration to get velocity.
+    odom->vx += linear_ax * dt;
+    odom->vy += linear_ay * dt;
+    odom->wz = gyro_rad_z; // Yaw rate is directly from the gyro
+
+    // printf("speed vx=%.2f m/s, vy=%.2f m/s, wz=%.2f rad/s\n", odom->vx, odom->vy, odom->wz);
+
+     // Optional: small acceleration damping
+    float acc_mag = sqrtf(linear_ax*linear_ax + linear_ay*linear_ay);
+    if (acc_mag < ACC_THRESHOLD) {
+        odom->vx *= VEL_DECAY;
+        odom->vy *= VEL_DECAY;
     }
 
-    // --- Cumulative velocities for position update ---
+    // 6. Accumulate velocities for the lower-frequency position update.
     odom->cumul_vx += odom->vx;
     odom->cumul_vy += odom->vy;
     odom->cumul_wz += odom->wz;
 }
 
-void mpu6500_odometry_position_update(mpu6500_odometry_t *odom, uint64_t current_time_us)
+/**
+ * @brief Updates position by integrating the averaged velocities.
+ *
+ * This function should be called at a lower frequency than the speed update.
+ * It takes the accumulated velocity, averages it, and computes the change in position.
+ */
+void mpu6500_odometry_position_update(mpu6500_t *mpu, uint64_t current_time_us)
 {
-    // float dt = (current_time_us - odom->position_last_time_us) / 1e6f; // Convert microseconds to seconds
-    // odom->position_last_time_us = current_time_us;
-    float dt = 0.001f;
-    
-    float vx = odom->cumul_vx / ODO_POS_EVERY_SPEED;
-    float vy = odom->cumul_vy / ODO_POS_EVERY_SPEED;
-    float wz = odom->cumul_wz / ODO_POS_EVERY_SPEED;
+    // Calculate the total time elapsed since the last position update.
+    // float dt_total = (current_time_us - mpu->odom.position_last_time_us) / 1e6f;
+    // mpu->odom.position_last_time_us = current_time_us;
 
-    // Reset cumulative sums
-    odom->cumul_vx = 0.0f;
-    odom->cumul_vy = 0.0f;
-    odom->cumul_wz = 0.0f;
-    
-    // Rotation matrix from body to world
-    float dx_local = vx * (dt * ODO_POS_EVERY_SPEED);
-    float dy_local = vy * (dt * ODO_POS_EVERY_SPEED);
-    float dz_local = wz * (dt * ODO_POS_EVERY_SPEED);
+    // if (dt_total <= 0.0f) {
+    //     return;
+    // }
+    float dt = 0.001f * ODO_POS_EVERY_SPEED; // Assuming speed update is at 1ms intervals
 
-    float cos_t = cosf(odom->theta);
-    float sin_t = sinf(odom->theta);
+    // Average the velocities collected since the last position update.
+    float vx_avg = mpu->odom.cumul_vx / ODO_POS_EVERY_SPEED;
+    float vy_avg = mpu->odom.cumul_vy / ODO_POS_EVERY_SPEED;
+    float wz_avg = mpu->odom.cumul_wz / ODO_POS_EVERY_SPEED;
 
-    float dx_w = cos_t * dx_local - sin_t * dy_local;
-    float dy_w = sin_t * dx_local + cos_t * dy_local;
+    // Reset cumulative sums for the next cycle.
+    mpu->odom.cumul_vx = 0.0f;
+    mpu->odom.cumul_vy = 0.0f;
+    mpu->odom.cumul_wz = 0.0f;
 
-    odom->x += dx_w;
-    odom->y += dy_w;
-    odom->theta += dz_local;
+    // Calculate displacement in the robot's local frame.
+    float dx_local = vx_avg * dt;
+    float dy_local = vy_avg * dt;
+    float dtheta   = wz_avg * dt;
 
-    // Normalize theta to [-pi, pi]
-    if (odom->theta > M_PI) odom->theta -= 2.0f * M_PI;
-    else if (odom->theta < -M_PI) odom->theta += 2.0f * M_PI;
+    // Rotate the local displacement into the world frame and update the position.
+    float cos_theta = cosf(mpu->odom.theta);
+    float sin_theta = sinf(mpu->odom.theta);
+
+    mpu->odom.x += cos_theta * dx_local - sin_theta * dy_local;
+    mpu->odom.y += sin_theta * dx_local + cos_theta * dy_local;
+    mpu->odom.theta += dtheta;
+
+    // Normalize theta to the range [-PI, PI] to prevent wrap-around errors.
+    mpu->odom.theta = atan2f(sinf(mpu->odom.theta), cosf(mpu->odom.theta));
 }
 
 int state_imu_odo = 0;
@@ -308,18 +345,17 @@ void imu_odo_loop(mpu6500_t *mpu)
         case 0:
             if (Timer_ms1 - imu_timer >= 1) { // 1000 Hz
                 imu_timer = Timer_ms1;
-                mpu6500_odometry_speed_update(&mpu->odom, mpu, time_us_64());
+                mpu6500_odometry_speed_update(mpu, time_us_64());
                 // printf("Speed: vx=%.2f m/s, vy=%.2f m/s, wz=%.2f rad/s\n", mpu->odom.vx, mpu->odom.vy, mpu->odom.wz);
-                if (mpu->odom.speed_update_counter < ODO_POS_EVERY_SPEED) {
-                    mpu->odom.speed_update_counter++;
-                }else {
-                    mpu->odom.speed_update_counter = 0; // Cap counter
-                    state_imu_odo++;
+                mpu->odom.speed_update_counter++;
+                if (mpu->odom.speed_update_counter >= ODO_POS_EVERY_SPEED) {
+                    mpu->odom.speed_update_counter = 0;
+                    state_imu_odo++; // Transition to position update
                 }
             }
             break;
         case 1:
-            mpu6500_odometry_position_update(&mpu->odom, time_us_64());
+            mpu6500_odometry_position_update(mpu, time_us_64());
             printf("Odometry: X=%.2f m, Y=%.2f m, Theta=%.2f rad\n", mpu->odom.x, mpu->odom.y, mpu->odom.theta);
             state_imu_odo++;
             break;

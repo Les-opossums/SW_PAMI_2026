@@ -66,6 +66,13 @@
 #define ODO_POS_EVERY_SPEED 5        
 
 
+// Gravity constant in m/s^2
+#define G_ACCEL 9.81f
+
+// Complementary filter coefficient (alpha).
+// 0.98 is a good starting point, trusting the gyro 98% and the accelerometer 2%.
+#define COMPLEMENTARY_FILTER_ALPHA 0.98f
+
 // Enum for Gyroscope Full Scale Range
 typedef enum {
     GYRO_FS_250_DPS = 0,
@@ -114,6 +121,9 @@ typedef struct {
     float accel_bias_x;
     float accel_bias_y;
     float gyro_bias_z;
+
+    float pitch; // estimated pitch angle (rad)
+    float roll;  // estimated roll angle (rad)
 
     float g_est_x; // estimated gravity vector
     float g_est_y;
@@ -239,10 +249,10 @@ void mpu6500_odometry_init(mpu6500_t *mpu);
  * @param mpu Pointer to the mpu6500_t struct.
  * @param current_time_us Current time in microseconds.
  */
-void mpu6500_odometry_speed_update(mpu6500_odometry_t *odom, mpu6500_t *mpu, uint64_t current_time_us);
+void mpu6500_odometry_speed_update(mpu6500_t *mpu, uint64_t current_time_us);
 
 
-void mpu6500_odometry_position_update(mpu6500_odometry_t *odom, uint64_t current_time_us);
+void mpu6500_odometry_position_update(mpu6500_t *mpu, uint64_t current_time_us);
 
 void imu_odo_loop(mpu6500_t *mpu);
 
