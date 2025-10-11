@@ -48,8 +48,8 @@ void mpu6500_init(mpu6500_t *mpu, i2c_inst_t *i2c, uint8_t address) {
         while (1); // Loop forever if initialization fails
     }
 
-    mpu6500_calibrate_gyro(mpu, 100); // Calibrate using 100 samples
-    mpu6500_calibrate_accel(mpu, 100); // Calibrate using 100 samples
+    mpu6500_calibrate_gyro(mpu, 1000); // Calibrate using 1000 samples
+    mpu6500_calibrate_accel(mpu, 1000); // Calibrate using 1000 samples
     printf("Calibration finished. Starting main loop.\n\n");
 }
 
@@ -205,6 +205,10 @@ void mpu6500_odometry_init(mpu6500_t *mpu)
     mpu->odom.cumul_vy = 0.0f;
     mpu->odom.cumul_wz = 0.0f;
 
+    mpu->odom.g_est_x = 0.0f;
+    mpu->odom.g_est_y = 0.0f;
+    mpu->odom.g_est_z = 0.0f;
+
     mpu->odom.accel_bias_x = 0.0f;
     mpu->odom.accel_bias_y = 0.0f;
     mpu->odom.gyro_bias_z = 0.0f;
@@ -218,9 +222,8 @@ void mpu6500_odometry_init(mpu6500_t *mpu)
 void mpu6500_odometry_speed_update(mpu6500_odometry_t *odom, mpu6500_t *mpu, uint64_t current_time_us)
 {
     // printf("Speed update called.\n");
-    // float dt = (current_time_us - odom->speed_last_time_us) / 1e6f;
-    // odom->speed_last_time_us = current_time_us;
-    float dt = 0.001f;
+    float dt = (current_time_us - odom->speed_last_time_us) / 1e6f;
+    odom->speed_last_time_us = current_time_us;
 
     if (dt <= 0.0f || dt > 0.1f) return; // safety against large time steps
 
@@ -229,42 +232,30 @@ void mpu6500_odometry_speed_update(mpu6500_odometry_t *odom, mpu6500_t *mpu, uin
     mpu6500_float_data_t gyro_data;
     mpu6500_get_accel_g(mpu, &accel_data);
     mpu6500_get_gyro_dps(mpu, &gyro_data);
+
     // --- Gyro integration ---
     odom->wz = (gyro_data.z - odom->gyro_bias_z) * (3.14159265f / 180.0f);
 
-    // --- Convert accel to m/s² ---
-    float ax = accel_data.x * 9.81f;
-    float ay = accel_data.y * 9.81f;
+    // --- Gravity estimation (low-pass) ---
+    const float alpha = 0.01f; // adjust for smoothness
+    odom->g_est_x = (1.0f - alpha) * odom->g_est_x + alpha * accel_data.x;
+    odom->g_est_y = (1.0f - alpha) * odom->g_est_y + alpha * accel_data.y;
+    odom->g_est_z = (1.0f - alpha) * odom->g_est_z + alpha * accel_data.z;
 
-    // printf("accel: ax=%.2f g, ay=%.2f g | gyro: wz=%.2f dps\n", accel_data.x, accel_data.y, gyro_data.z);
-
-    // --- Online accelerometer bias estimation ---
-    // If acceleration magnitude is small, consider it bias and slowly adapt
-    // float acc_mag = sqrtf(ax * ax + ay * ay);
-    // if (acc_mag < 0.5f) {
-    //     // Convert accel_data to m/s² before updating bias
-    //     float ax_m_s2 = accel_data.x * 9.81f;
-    //     float ay_m_s2 = accel_data.y * 9.81f;
-
-    //     odom->accel_bias_x = (1.0f - BIAS_FILTER_ALPHA) * odom->accel_bias_x + BIAS_FILTER_ALPHA * ax_m_s2;
-    //     odom->accel_bias_y = (1.0f - BIAS_FILTER_ALPHA) * odom->accel_bias_y + BIAS_FILTER_ALPHA * ay_m_s2;
-    // }
-
-    // printf("Accel bias: bx=%.4f g, by=%.4f g\n", odom->accel_bias_x, odom->accel_bias_y);
-
-    // Subtract bias
-    // ax -= odom->accel_bias_x * 9.81f;
-    // ay -= odom->accel_bias_y * 9.81f;
+    // --- Remove gravity from raw acceleration ---
+    float ax_corr = (accel_data.x - odom->g_est_x) * 9.81f;
+    float ay_corr = (accel_data.y - odom->g_est_y) * 9.81f;
 
     // --- Velocity integration in body frame ---
-    odom->vx += ax * dt;
-    odom->vy += ay * dt;
-
-    // --- Velocity damping if acceleration is small ---
-    float lin_acc = sqrtf(ax * ax + ay * ay);
-    if (lin_acc < ACC_THRESHOLD) {
-        odom->vx *= VEL_DECAY;
-        odom->vy *= VEL_DECAY;
+    float lin_acc = sqrtf(ax_corr * ax_corr + ay_corr * ay_corr);
+    // Only integrate if acceleration is meaningful
+    if (lin_acc > 0.05f) {
+        odom->vx += ax_corr * dt;
+        odom->vy += ay_corr * dt;
+    } else {
+        // Optional damping to reduce drift
+        odom->vx *= 0.98f;
+        odom->vy *= 0.98f;
     }
 
     // --- Cumulative velocities for position update ---

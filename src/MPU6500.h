@@ -63,7 +63,7 @@
 #define VEL_DECAY           0.95f      // velocity damping factor per update when stationary
 #define ACC_THRESHOLD       0.05f      // m/s²
 #define BIAS_FILTER_ALPHA   0.005f     // low-pass for bias estimation
-#define ODO_POS_EVERY_SPEED 5          
+#define ODO_POS_EVERY_SPEED 5        
 
 
 // Enum for Gyroscope Full Scale Range
@@ -114,6 +114,10 @@ typedef struct {
     float accel_bias_x;
     float accel_bias_y;
     float gyro_bias_z;
+
+    float g_est_x; // estimated gravity vector
+    float g_est_y;
+    float g_est_z;
 
     uint64_t speed_last_time_us;
     uint64_t position_last_time_us;
