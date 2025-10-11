@@ -41,96 +41,46 @@ int main()
     gpio_init(IMU_I2C_SCL);
     i2c_init(i2c1, 400000); // 400kHz
 
-
     gpio_set_function(IMU_I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(IMU_I2C_SCL, GPIO_FUNC_I2C);
     // Don't forget the pull ups! | Or use external ones
     gpio_pull_up(IMU_I2C_SDA);
     gpio_pull_up(IMU_I2C_SCL);
 
-    mpu6050_t mpu6050 = mpu6050_init(i2c1, 0x68);
-
-    mpu6050_set_accelerometer_measuring(&mpu6050, 1);
-    mpu6050_set_gyroscope_measuring(&mpu6050, 1);
-
-
-
-    if (mpu6050_begin(&mpu6050))
-    {
-        // Set scale of gyroscope
-        mpu6050_set_scale(&mpu6050, MPU6050_SCALE_2000DPS);
-        // Set range of accelerometer
-        mpu6050_set_range(&mpu6050, MPU6050_RANGE_16G);
-
-        // Enable temperature, gyroscope and accelerometer readings
-        mpu6050_set_temperature_measuring(&mpu6050, true);
-        mpu6050_set_gyroscope_measuring(&mpu6050, true);
-        mpu6050_set_accelerometer_measuring(&mpu6050, true);
-
-        // Enable free fall, motion and zero motion interrupt flags
-        mpu6050_set_int_free_fall(&mpu6050, false);
-        mpu6050_set_int_motion(&mpu6050, false);
-        mpu6050_set_int_zero_motion(&mpu6050, false);
-
-        // Set motion detection threshold and duration
-        mpu6050_set_motion_detection_threshold(&mpu6050, 2);
-        mpu6050_set_motion_detection_duration(&mpu6050, 5);
-
-        // Set zero motion detection threshold and duration
-        mpu6050_set_zero_motion_detection_threshold(&mpu6050, 4);
-        mpu6050_set_zero_motion_detection_duration(&mpu6050, 2);
-    }
-    else
-    {
-        while (1)
-        {
-            // Endless loop
-            printf("Error! MPU6050 could not be initialized. Make sure you've entered the correct address. And double check your connections.\n");
-            sleep_ms(500);
-        }
+    mpu6500_t mpu6500;
+    mpu6500_init(&mpu6500, i2c1, MPU6500_I2C_ADDR); // Most common I2C address for MPU-6500 is 0x68
+    // Attempt to begin communication with the MPU-6500
+    if (!mpu6500_begin(&mpu6500)) {
+        printf("Failed to initialize MPU-6500. Halting.\n");
+        while (1); // Loop forever if initialization fails
     }
 
-    // Calibrate gyro. Make sure the IMU is completely still.
-    mpu6050_calibrate_gyro_on_startup(&mpu6050, 1000);
-    // Calibrate accelerometer. Make sure the IMU is completely still and flat.
-    mpu6050_calibrate_accel_on_startup(&mpu6050, 1000);
+
+    // Data structures to hold the sensor readings
+    mpu6500_float_data_t accel_data;
+    mpu6500_float_data_t gyro_data;
+    float temp_c;
+
 
     while (true) {
         Timer_Update(); // Met à jour les timers
         int c;
 
-        mpu6050_event(&mpu6050);
+        // Read all raw sensor data at once
+        mpu6500_read_raw(&mpu6500);
 
-        // Pointers to float vectors with all the results
-        mpu6050_vectorf_t *accel = mpu6050_get_accelerometer(&mpu6050);
-        mpu6050_vectorf_t *gyro = mpu6050_get_gyroscope(&mpu6050);
+        // Convert raw data to meaningful units
+        mpu6500_get_accel_g(&mpu6500, &accel_data);
+        mpu6500_get_gyro_dps(&mpu6500, &gyro_data);
+        temp_c = mpu6500_get_temp_c(&mpu6500);
 
-        // Activity struct holding all interrupt flags
-        mpu6050_activity_t *activities = mpu6050_read_activities(&mpu6050);
+        // Print the results
+        printf("Accel (g): X=%.2f, Y=%.2f, Z=%.2f  |  ", accel_data.x, accel_data.y, accel_data.z);
+        printf("Gyro (dps): X=%.2f, Y=%.2f, Z=%.2f  |  ", gyro_data.x, gyro_data.y, gyro_data.z);
+        printf("Temp: %.2f C\n", temp_c);
+        
+        sleep_ms(100); // Delay for readability
 
-        // Rough temperatures as float -- Keep in mind, this is not a temperature sensor!!!
-        float tempC = mpu6050_get_temperature_c(&mpu6050);
-        float tempF = mpu6050_get_temperature_f(&mpu6050);
-
-        // Print all the measurements
-        printf("Accelerometer: %f, %f, %f, Gyroscope: %f, %f, %f\n", accel->x, accel->y, accel->z, gyro->x, gyro->y, gyro->z);
-
-        // Print all motion interrupt flags
-        // printf("Overflow: %d - Freefall: %d - Inactivity: %d, Activity: %d, DataReady: %d\n",
-        //        activities->isOverflow,
-        //        activities->isFreefall,
-        //        activities->isInactivity,
-        //        activities->isActivity,
-        //        activities->isDataReady);
-
-        // // Print all motion detect interrupt flags
-        // printf("PosX: %d - NegX: %d -- PosY: %d - NegY: %d -- PosZ: %d - NegZ: %d\n",
-        //        activities->isPosActivityOnX,
-        //        activities->isNegActivityOnX,
-        //        activities->isPosActivityOnY,
-        //        activities->isNegActivityOnY,
-        //        activities->isPosActivityOnZ,
-        //        activities->isNegActivityOnZ);
         // cyw43_arch_poll();
         
         // if ((Timer_ms1 - tcp_timer) > 1000) {
