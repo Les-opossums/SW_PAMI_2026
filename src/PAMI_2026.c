@@ -55,6 +55,9 @@ int main()
         while (1); // Loop forever if initialization fails
     }
 
+    mpu6500_calibrate_gyro(&mpu6500, 1000); // Calibrate using 1000 samples
+    mpu6500_calibrate_accel(&mpu6500, 1000); // Calibrate using 1000 samples
+    printf("Calibration finished. Starting main loop.\n\n");
 
     // Data structures to hold the sensor readings
     mpu6500_float_data_t accel_data;
@@ -69,17 +72,17 @@ int main()
         // Read all raw sensor data at once
         mpu6500_read_raw(&mpu6500);
 
-        // Convert raw data to meaningful units
+        // // Convert raw data to meaningful units
         mpu6500_get_accel_g(&mpu6500, &accel_data);
         mpu6500_get_gyro_dps(&mpu6500, &gyro_data);
         temp_c = mpu6500_get_temp_c(&mpu6500);
 
-        // Print the results
+        // // Print the results
         printf("Accel (g): X=%.2f, Y=%.2f, Z=%.2f  |  ", accel_data.x, accel_data.y, accel_data.z);
         printf("Gyro (dps): X=%.2f, Y=%.2f, Z=%.2f  |  ", gyro_data.x, gyro_data.y, gyro_data.z);
         printf("Temp: %.2f C\n", temp_c);
         
-        sleep_ms(100); // Delay for readability
+        // sleep_ms(100); // Delay for readability
 
         // cyw43_arch_poll();
         

@@ -14,10 +14,24 @@ static void i2c_read_reg(i2c_inst_t *i2c, uint8_t addr, uint8_t reg, uint8_t *bu
     i2c_read_blocking(i2c, addr, buf, len, false);
 }
 
+static void i2c_write_reg_u16_be(i2c_inst_t *i2c, uint8_t addr, uint8_t reg_h, int16_t value) {
+    uint8_t data[3] = {reg_h, (uint8_t)(value >> 8), (uint8_t)(value & 0xFF)};
+    i2c_write_blocking(i2c, addr, data, 3, false);
+}
+
 // Public functions
 void mpu6500_init(mpu6500_t *mpu, i2c_inst_t *i2c, uint8_t address) {
     mpu->i2c_instance = i2c;
     mpu->i2c_address = address;
+
+    // Initialize offsets to zero
+    mpu->gyro_offset.x = 0;
+    mpu->gyro_offset.y = 0;
+    mpu->gyro_offset.z = 0;
+
+    mpu->accel_offset.x = 0;
+    mpu->accel_offset.y = 0;
+    mpu->accel_offset.z = 0;
 }
 
 bool mpu6500_begin(mpu6500_t *mpu) {
@@ -94,15 +108,15 @@ void mpu6500_read_raw(mpu6500_t *mpu) {
 }
 
 void mpu6500_get_accel_g(mpu6500_t *mpu, mpu6500_float_data_t *data) {
-    data->x = (float)mpu->raw_accel.x / mpu->accel_scaler;
-    data->y = (float)mpu->raw_accel.y / mpu->accel_scaler;
-    data->z = (float)mpu->raw_accel.z / mpu->accel_scaler;
+    data->x = (float)(mpu->raw_accel.x - mpu->accel_offset.x) / mpu->accel_scaler;
+    data->y = (float)(mpu->raw_accel.y - mpu->accel_offset.y) / mpu->accel_scaler;
+    data->z = (float)(mpu->raw_accel.z - mpu->accel_offset.z) / mpu->accel_scaler;
 }
 
 void mpu6500_get_gyro_dps(mpu6500_t *mpu, mpu6500_float_data_t *data) {
-    data->x = (float)mpu->raw_gyro.x / mpu->gyro_scaler;
-    data->y = (float)mpu->raw_gyro.y / mpu->gyro_scaler;
-    data->z = (float)mpu->raw_gyro.z / mpu->gyro_scaler;
+    data->x = (float)(mpu->raw_gyro.x - mpu->gyro_offset.x) / mpu->gyro_scaler;
+    data->y = (float)(mpu->raw_gyro.y - mpu->gyro_offset.y) / mpu->gyro_scaler;
+    data->z = (float)(mpu->raw_gyro.z - mpu->gyro_offset.z) / mpu->gyro_scaler;
 }
 
 float mpu6500_get_temp_c(mpu6500_t *mpu) {
@@ -110,4 +124,50 @@ float mpu6500_get_temp_c(mpu6500_t *mpu) {
     // Temp_C = ((Temp_out - RoomTemp_Offset) / Temp_Sensitivity) + 21.0
     // We use a simplified version which is very close.
     return ((float)mpu->raw_temp / 333.87f) + 21.0f;
+}
+
+void mpu6500_calibrate_gyro(mpu6500_t *mpu, uint16_t num_samples) {
+    printf("Starting gyroscope calibration. Keep the sensor stationary...\n");
+    // Use long to prevent overflow
+    long gyro_x_sum = 0;
+    long gyro_y_sum = 0;
+    long gyro_z_sum = 0;
+
+    // Take a number of readings and sum them
+    for (int i = 0; i < num_samples; i++) {
+        mpu6500_read_raw(mpu);
+        gyro_x_sum += mpu->raw_gyro.x;
+        gyro_y_sum += mpu->raw_gyro.y;
+        gyro_z_sum += mpu->raw_gyro.z;
+        sleep_ms(5); // Small delay between readings
+    }
+
+    // Calculate the average bias
+    mpu->gyro_offset.x = (int16_t)(gyro_x_sum / num_samples);
+    mpu->gyro_offset.y = (int16_t)(gyro_y_sum / num_samples);
+    mpu->gyro_offset.z = (int16_t)(gyro_z_sum / num_samples);
+    printf("Calibration complete. Raw bias: X=%d, Y=%d, Z=%d\n", mpu->gyro_offset.x, mpu->gyro_offset.y, mpu->gyro_offset.z);
+}
+
+void mpu6500_calibrate_accel(mpu6500_t *mpu, uint16_t num_samples) {
+    printf("Starting accelerometer calibration. Keep the sensor stationary...\n");
+    // Use long to prevent overflow
+    long accel_x_sum = 0;
+    long accel_y_sum = 0;
+    long accel_z_sum = 0;
+
+    // Take a number of readings and sum them
+    for (int i = 0; i < num_samples; i++) {
+        mpu6500_read_raw(mpu);
+        accel_x_sum += mpu->raw_accel.x;
+        accel_y_sum += mpu->raw_accel.y;
+        accel_z_sum += mpu->raw_accel.z;
+        sleep_ms(5); // Small delay between readings
+    }
+
+    // Calculate the average bias
+    mpu->accel_offset.x = (int16_t)(accel_x_sum / num_samples);
+    mpu->accel_offset.y = (int16_t)(accel_y_sum / num_samples);
+    mpu->accel_offset.z = (int16_t)(accel_z_sum / num_samples);
+    printf("Calibration complete. Raw bias: X=%d, Y=%d, Z=%d\n", mpu->accel_offset.x, mpu->accel_offset.y, mpu->accel_offset.z);
 }
