@@ -25,19 +25,8 @@ int main()
         Timer_Update(); // Met à jour les timers
         int c;
 
-        // Read all raw sensor data at once
-        mpu6500_read_raw(&mpu6500);
-
-        // // Convert raw data to meaningful units
-        mpu6500_get_accel_g(&mpu6500, &accel_data);
-        mpu6500_get_gyro_dps(&mpu6500, &gyro_data);
-
-        // // Print the results
-        // printf("Accel (g): X=%.2f, Y=%.2f, Z=%.2f  |  ", accel_data.x, accel_data.y, accel_data.z);
-        // printf("Gyro (dps): X=%.2f, Y=%.2f, Z=%.2f  |  ", gyro_data.x, gyro_data.y, gyro_data.z);
-
         // Met à jour les moteurs pas à pas
-        //     Move_Loop();
+        // Move_Loop();
 
         switch (sequencer) {
             case 0:

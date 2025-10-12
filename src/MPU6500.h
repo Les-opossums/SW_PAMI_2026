@@ -129,6 +129,10 @@ typedef struct {
     float g_est_y;
     float g_est_z;
 
+    // inside mpu6500_odometry_t
+    float q0, q1, q2, q3;      // Madgwick quaternion (unit)
+    float madgwick_beta;       // filter gain
+
     uint64_t speed_last_time_us;
     uint64_t position_last_time_us;
 

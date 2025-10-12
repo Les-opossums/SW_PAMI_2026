@@ -18,6 +18,68 @@ static void i2c_write_reg_u16_be(i2c_inst_t *i2c, uint8_t addr, uint8_t reg_h, i
     i2c_write_blocking(i2c, addr, data, 3, false);
 }
 
+// MadgwickAHRSupdateIMU: update quaternion using gyro (rad/s) and accel (g units, not yet normalized)
+static void MadgwickAHRSupdateIMU(float *q0, float *q1, float *q2, float *q3,
+                                  float gx, float gy, float gz,
+                                  float ax, float ay, float az,
+                                  float beta, float dt)
+{
+    // gx,gy,gz in rad/s
+    // ax,ay,az are accelerometer readings in ANY units but must be normalized inside
+    float q0l = *q0, q1l = *q1, q2l = *q2, q3l = *q3;
+
+    // Normalize accelerometer measurement
+    float norm = ax*ax + ay*ay + az*az;
+    if (norm == 0.0f) return; // invalid data
+    norm = 1.0f / sqrtf(norm);
+    ax *= norm; ay *= norm; az *= norm;
+
+    // Auxiliary variables to avoid repeated arithmetic
+    float _2q0 = 2.0f * q0l;
+    float _2q1 = 2.0f * q1l;
+    float _2q2 = 2.0f * q2l;
+    float _2q3 = 2.0f * q3l;
+    float _4q0 = 4.0f * q0l;
+    float _4q1 = 4.0f * q1l;
+    float _4q2 = 4.0f * q2l;
+    float _8q1 = 8.0f * q1l;
+    float _8q2 = 8.0f * q2l;
+    float q0q0 = q0l * q0l;
+    float q1q1 = q1l * q1l;
+    float q2q2 = q2l * q2l;
+    float q3q3 = q3l * q3l;
+
+    // Gradient descent algorithm corrective step
+    float s0 = _4q0 * q2q2 + _2q2 * ax + _4q0 * q1q1 - _2q1 * ay;
+    float s1 = _4q1 * q3q3 - _2q3 * ax + 4.0f * q0q0 * q1l - _2q0 * ay - _4q1 + _8q1 * q1q1 + _8q1 * q2q2 + _4q1 * az;
+    float s2 = 4.0f * q0q0 * q2l + _2q0 * ax + _4q2 * q3q3 - _2q3 * ay - _4q2 + _8q2 * q1q1 + _8q2 * q2q2 + _4q2 * az;
+    float s3 = 4.0f * q1q1 * q3l - _2q1 * ax + 4.0f * q2q2 * q3l - _2q2 * ay;
+
+    // Normalize step magnitude
+    float s_norm = sqrtf(s0*s0 + s1*s1 + s2*s2 + s3*s3);
+    if (s_norm == 0.0f) return;
+    s0 /= s_norm; s1 /= s_norm; s2 /= s_norm; s3 /= s_norm;
+
+    // Compute rate of change of quaternion
+    // quaternion derivative from gyroscope
+    float qDot0 = 0.5f * (-q1l * gx - q2l * gy - q3l * gz) - beta * s0;
+    float qDot1 = 0.5f * ( q0l * gx + q2l * gz - q3l * gy) - beta * s1;
+    float qDot2 = 0.5f * ( q0l * gy - q1l * gz + q3l * gx) - beta * s2;
+    float qDot3 = 0.5f * ( q0l * gz + q1l * gy - q2l * gx) - beta * s3;
+
+    // Integrate to yield quaternion
+    q0l += qDot0 * dt;
+    q1l += qDot1 * dt;
+    q2l += qDot2 * dt;
+    q3l += qDot3 * dt;
+
+    // Normalize quaternion
+    float qnorm = 1.0f / sqrtf(q0l*q0l + q1l*q1l + q2l*q2l + q3l*q3l);
+    *q0 = q0l * qnorm;
+    *q1 = q1l * qnorm;
+    *q2 = q2l * qnorm;
+    *q3 = q3l * qnorm;
+}
 // Public functions
 void mpu6500_init(mpu6500_t *mpu, i2c_inst_t *i2c, uint8_t address) {
     mpu->i2c_instance = i2c;
@@ -216,6 +278,9 @@ void mpu6500_odometry_init(mpu6500_t *mpu)
     mpu->odom.accel_bias_y = 0.0f;
     mpu->odom.gyro_bias_z = 0.0f;
 
+    mpu->odom.q0 = 1.0f; mpu->odom.q1 = 0.0f; mpu->odom.q2 = 0.0f; mpu->odom.q3 = 0.0f;
+    mpu->odom.madgwick_beta = 0.1f; // starting value; tune later between 0.01..0.3
+
     mpu->odom.speed_last_time_us = 0;
     mpu->odom.position_last_time_us = 0;
 
@@ -229,13 +294,10 @@ void mpu6500_odometry_speed_update(mpu6500_t *mpu, uint64_t current_time_us)
     // 1. Calculate time delta (dt) in seconds.
     float dt = (current_time_us - odom->speed_last_time_us) / 1e6f;
     odom->speed_last_time_us = current_time_us;
-
-    // Safety check for valid time step
-    if (dt <= 0.0f || dt > 0.1f) {
-        return;
-    }
+    if (dt <= 0.0f || dt > 0.1f) return;
 
     // 2. Get calibrated sensor data.
+    mpu6500_read_raw(mpu);
     mpu6500_float_data_t accel_data;
     mpu6500_float_data_t gyro_data;
     mpu6500_get_accel_g(mpu, &accel_data);
@@ -249,44 +311,56 @@ void mpu6500_odometry_speed_update(mpu6500_t *mpu, uint64_t current_time_us)
     float gyro_rad_y = gyro_data.y * (M_PI / 180.0f);
     float gyro_rad_z = gyro_data.z * (M_PI / 180.0f);
 
-    odom->pitch += gyro_rad_x * dt;
-    odom->roll  -= gyro_rad_y * dt;
+    
+    // 4) Madgwick update (accelerometer inputs must be in same scale but normalized inside)
+    MadgwickAHRSupdateIMU(&odom->q0, &odom->q1, &odom->q2, &odom->q3,
+                         gyro_data.x, gyro_data.y, gyro_data.z,
+                         accel_data.x, accel_data.y, accel_data.z,
+                         odom->madgwick_beta, dt);
 
-    float ax = accel_data.x * G_ACCEL;
-    float ay = accel_data.y * G_ACCEL;
-    float az = accel_data.z * G_ACCEL;
+    // 5) compute gravity vector in body frame from quaternion (unit quaternion expected)
+    // from quaternion to direction of gravity in body frame:
+    // g_b = [ 2*(q1*q3 - q0*q2),
+    //         2*(q0*q1 + q2*q3),
+    //         q0^2 - q1^2 - q2^2 + q3^2 ] * G_ACCEL
+    float q0 = odom->q0, q1 = odom->q1, q2 = odom->q2, q3 = odom->q3;
+    float gx_b = 2.0f * (q1*q3 - q0*q2) * G_ACCEL;
+    float gy_b = 2.0f * (q0*q1 + q2*q3) * G_ACCEL;
+    float gz_b = (q0*q0 - q1*q1 - q2*q2 + q3*q3) * G_ACCEL;
 
-    //  b) Calculate long-term orientation from the accelerometer (which way is "down").
-    float pitch_accel = atan2f(ax, sqrtf(ay * ay + az * az));
-    float roll_accel  = atan2f(-ay, -az);
+    // 6) convert measured accel to m/s^2 and subtract gravity
+    float ax_m = accel_data.x * G_ACCEL;
+    float ay_m = accel_data.y * G_ACCEL;
+    float az_m = accel_data.z * G_ACCEL;
 
-    //  c) Fuse the two estimates.
-    odom->pitch = COMPLEMENTARY_FILTER_ALPHA * odom->pitch + (1.0f - COMPLEMENTARY_FILTER_ALPHA) * pitch_accel;
-    odom->roll  = COMPLEMENTARY_FILTER_ALPHA * odom->roll  + (1.0f - COMPLEMENTARY_FILTER_ALPHA) * roll_accel;
+    float lin_ax = ax_m - gx_b;
+    float lin_ay = ay_m - gy_b;
+    // optionally use lin_az = az_m - gz_b;
 
-    // 4. Gravity Compensation
-    //  Use the estimated attitude to calculate and remove the gravity component.
-    float gravity_comp_x =  G_ACCEL * sinf(odom->pitch);
-    float gravity_comp_y = -G_ACCEL * sinf(odom->roll) * cosf(odom->pitch);
+    // 7) integrate linear acceleration -> velocity (body frame)
+    // small sanity/clamp to avoid exploding on bad samples
+    if (!isfinite(lin_ax) || !isfinite(lin_ay)) return;
+    // optional clipping:
+    const float ACC_CLIP = 50.0f * 9.81f; // 50 g; extreme guard
+    if (lin_ax > ACC_CLIP) lin_ax = ACC_CLIP;
+    if (lin_ax < -ACC_CLIP) lin_ax = -ACC_CLIP;
+    if (lin_ay > ACC_CLIP) lin_ay = ACC_CLIP;
+    if (lin_ay < -ACC_CLIP) lin_ay = -ACC_CLIP;
 
-    float linear_ax = ax - gravity_comp_x;
-    float linear_ay = ay - gravity_comp_y;
+    odom->vx += lin_ax * dt;
+    odom->vy += lin_ay * dt;
 
-    // 5. Integrate corrected acceleration to get velocity.
-    odom->vx += linear_ax * dt;
-    odom->vy += linear_ay * dt;
-    odom->wz = gyro_rad_z; // Yaw rate is directly from the gyro
-
-    // printf("speed vx=%.2f m/s, vy=%.2f m/s, wz=%.2f rad/s\n", odom->vx, odom->vy, odom->wz);
-
-     // Optional: small acceleration damping
-    float acc_mag = sqrtf(linear_ax*linear_ax + linear_ay*linear_ay);
-    if (acc_mag < ACC_THRESHOLD) {
+    // small deadband/damping to avoid integrating tiny bias
+    float lin_acc = sqrtf(lin_ax*lin_ax + lin_ay*lin_ay);
+    if (lin_acc < ACC_THRESHOLD) {
         odom->vx *= VEL_DECAY;
         odom->vy *= VEL_DECAY;
     }
 
-    // 6. Accumulate velocities for the lower-frequency position update.
+    // 8) store yaw rate in rad/s
+    odom->wz = gyro_rad_z;
+
+    // 9) accumulate for position update
     odom->cumul_vx += odom->vx;
     odom->cumul_vy += odom->vy;
     odom->cumul_wz += odom->wz;
@@ -356,7 +430,7 @@ void imu_odo_loop(mpu6500_t *mpu)
             break;
         case 1:
             mpu6500_odometry_position_update(mpu, time_us_64());
-            printf("Odometry: X=%.2f m, Y=%.2f m, Theta=%.2f rad\n", mpu->odom.x, mpu->odom.y, mpu->odom.theta);
+            // printf("Odometry: X=%.2f m, Y=%.2f m, Theta=%.2f rad\n", mpu->odom.x, mpu->odom.y, mpu->odom.theta);
             state_imu_odo++;
             break;
         default:
