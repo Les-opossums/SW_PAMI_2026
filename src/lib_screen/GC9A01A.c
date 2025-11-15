@@ -309,3 +309,118 @@ void gc9a01a_set_rotation(gc9a01a_t *tft, uint8_t m) {
 void gc9a01a_invert_display(gc9a01a_t *tft, bool invert) {
     spi_write_command(tft, invert ? GC9A01A_INVON : GC9A01A_INVOFF);
 }
+
+
+// =========================================================================
+// GRAPHICS AND ANIMATION FUNCTIONS
+// =========================================================================
+
+void gc9a01a_draw_pixel(gc9a01a_t *tft, uint16_t x, uint16_t y, uint16_t color) {
+    if ((x >= tft->_width) || (y >= tft->_height)) return;
+    
+    // 1. Set the 1x1 address window
+    gc9a01a_set_addr_window(x, y, 1, 1);
+
+    // 2. Write the 16-bit color data (CS is low after RAMWR command)
+    gpio_put(tft->dc_pin, 1); 
+    spi_write_data_16bit(tft, color);
+    
+    // 3. End transaction
+    gpio_put(tft->cs_pin, 1); 
+}
+
+// Optimized line drawing function for filling a circle row (internal use)
+static void gc9a01a_draw_fast_hline(gc9a01a_t *tft, int16_t x, int16_t y, int16_t w, uint16_t color) {
+    if (w <= 0 || y < 0 || y >= tft->_height || x >= tft->_width || x + w <= 0) return;
+
+    int16_t x2 = x + w - 1;
+    if (x < 0) { w += x; x = 0; }
+    if (x2 >= tft->_width) { w = tft->_width - x; }
+
+    if (w > 0) {
+        gc9a01a_set_addr_window(x, y, w, 1);
+        gpio_put(tft->dc_pin, 1); // Data mode
+
+        // Write pixel data in a block
+        for (int16_t i = 0; i < w; i++) {
+            spi_write_data_16bit(tft, color);
+        }
+        gpio_put(tft->cs_pin, 1); // End transaction
+    }
+}
+
+void gc9a01a_fill_circle(gc9a01a_t *tft, int16_t x0, int16_t y0, int16_t r, uint16_t color) {
+    int16_t f = 1 - r;
+    int16_t ddF_x = 1;
+    int16_t ddF_y = -2 * r;
+    int16_t x = 0;
+    int16_t y = r;
+
+    gc9a01a_draw_fast_hline(tft, x0 - r, y0, 2 * r + 1, color);
+
+    while (x < y) {
+        if (f >= 0) {
+            y--;
+            ddF_y += 2;
+            f += ddF_y;
+        }
+        x++;
+        ddF_x += 2;
+        f += ddF_x;
+
+        gc9a01a_draw_fast_hline(tft, x0 - x, y0 + y, 2 * x + 1, color);
+        gc9a01a_draw_fast_hline(tft, x0 - x, y0 - y, 2 * x + 1, color);
+        gc9a01a_draw_fast_hline(tft, x0 - y, y0 + x, 2 * y + 1, color);
+        gc9a01a_draw_fast_hline(tft, x0 - y, y0 - x, 2 * y + 1, color);
+    }
+}
+
+void gc9a01a_draw_minion_eye(gc9a01a_t *tft, int16_t pupil_cx, int16_t pupil_cy) {
+    // 1. Draw the surrounding Goggle/Minion skin (Yellow/Gold)
+    gc9a01a_fill_circle(tft, CENTER_X, CENTER_Y, GOGGLE_R, MINION_YELLOW);
+    
+    // 2. Draw the Black Border Ring (Goggle Frame)
+    gc9a01a_fill_circle(tft, CENTER_X, CENTER_Y, EYE_R + 5, BORDER_BLACK);
+    
+    // 3. Draw the White of the Eye
+    gc9a01a_fill_circle(tft, CENTER_X, CENTER_Y, EYE_R, EYE_WHITE);
+    
+    // 4. Draw the Iris (Brown/Colored part)
+    gc9a01a_fill_circle(tft, pupil_cx, pupil_cy, IRIS_R, IRIS_BROWN);
+    
+    // 5. Draw the Pupil (Black dot)
+    gc9a01a_fill_circle(tft, pupil_cx, pupil_cy, PUPIL_R, PUPIL_BLACK);
+}
+
+// Function to calculate clamped pupil position
+static void calculate_pupil_position(float angle_deg, int16_t *out_x, int16_t *out_y) {
+    float angle_rad = angle_deg * M_PI / 180.0f;
+    
+    int16_t offset_x = (int16_t)(MOVE_LIMIT * cos(angle_rad));
+    int16_t offset_y = (int16_t)(MOVE_LIMIT * sin(angle_rad));
+    
+    *out_x = CENTER_X + offset_x;
+    *out_y = CENTER_Y + offset_y;
+}
+
+void gc9a01a_animate_eye(gc9a01a_t *tft) {
+    static int16_t current_pupil_x = CENTER_X;
+    static int16_t current_pupil_y = CENTER_Y;
+    static float current_angle = 0.0f;
+
+    // A. Redraw the previous iris/pupil block with White to clear it
+    gc9a01a_fill_circle(tft, current_pupil_x, current_pupil_y, IRIS_R, EYE_WHITE);
+        
+    // B. Calculate New Position 
+    current_angle += 5.0f; // Incremental movement
+    if (current_angle >= 360.0f) {
+        current_angle -= 360.0f;
+    }
+    calculate_pupil_position(current_angle, &current_pupil_x, &current_pupil_y);
+
+    // C. Draw the new Iris and Pupil
+    gc9a01a_fill_circle(tft, current_pupil_x, current_pupil_y, IRIS_R, IRIS_BROWN);
+    gc9a01a_fill_circle(tft, current_pupil_x, current_pupil_y, PUPIL_R, PUPIL_BLACK);
+    
+    delay_ms(30); // Control animation speed (~33 FPS)
+}

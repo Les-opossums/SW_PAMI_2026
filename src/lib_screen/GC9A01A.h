@@ -121,4 +121,26 @@ void gc9a01a_set_rotation(gc9a01a_t *tft, uint8_t rotation);
  */
 void gc9a01a_invert_display(gc9a01a_t *tft, bool invert);
 
+// --- Minion Eye Colors (RGB565) ---
+#define MINION_YELLOW 0xFF40
+#define IRIS_BROWN    0x8000
+#define PUPIL_BLACK   0x0000
+#define EYE_WHITE     0xFFFF
+#define BORDER_BLACK  0x0000
+
+// --- Minion Eye Geometry ---
+#define CENTER_X 120
+#define CENTER_Y 120
+#define GOGGLE_R 120
+#define EYE_R     90
+#define IRIS_R    45
+#define PUPIL_R   20
+#define MOVE_LIMIT 35
+
+// --- Graphics Functions (Implemented in gc9a01a.c) ---
+void gc9a01a_draw_pixel(gc9a01a_t *tft, uint16_t x, uint16_t y, uint16_t color);
+void gc9a01a_fill_circle(gc9a01a_t *tft, int16_t x0, int16_t y0, int16_t r, uint16_t color);
+void gc9a01a_draw_minion_eye(gc9a01a_t *tft, int16_t pupil_cx, int16_t pupil_cy);
+void gc9a01a_animate_eye(gc9a01a_t *tft);
+
 #endif // GC9A01A_H
