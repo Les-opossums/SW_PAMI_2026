@@ -23,6 +23,10 @@
 #include "Asserv_Loop.h"
 #include "Cmd_For_Move.h"
 
+// include for screen
+#include "hardware/spi.h"
+#include "hardware/gpio.h"
+#include "lib_screen/GC9A01A.h"
 
 // include for web socket
 #include "tcp_server.h"
