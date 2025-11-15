@@ -319,7 +319,7 @@ void gc9a01a_draw_pixel(gc9a01a_t *tft, uint16_t x, uint16_t y, uint16_t color) 
     if ((x >= tft->_width) || (y >= tft->_height)) return;
     
     // 1. Set the 1x1 address window
-    gc9a01a_set_addr_window(x, y, 1, 1);
+    gc9a01a_set_addr_window(tft, x, y, 1, 1);
 
     // 2. Write the 16-bit color data (CS is low after RAMWR command)
     gpio_put(tft->dc_pin, 1); 
@@ -338,7 +338,7 @@ static void gc9a01a_draw_fast_hline(gc9a01a_t *tft, int16_t x, int16_t y, int16_
     if (x2 >= tft->_width) { w = tft->_width - x; }
 
     if (w > 0) {
-        gc9a01a_set_addr_window(x, y, w, 1);
+        gc9a01a_set_addr_window(tft, x, y, w, 1);
         gpio_put(tft->dc_pin, 1); // Data mode
 
         // Write pixel data in a block
@@ -422,5 +422,5 @@ void gc9a01a_animate_eye(gc9a01a_t *tft) {
     gc9a01a_fill_circle(tft, current_pupil_x, current_pupil_y, IRIS_R, IRIS_BROWN);
     gc9a01a_fill_circle(tft, current_pupil_x, current_pupil_y, PUPIL_R, PUPIL_BLACK);
     
-    delay_ms(30); // Control animation speed (~33 FPS)
+    delay_ms(100); // Control animation speed (~33 FPS)
 }

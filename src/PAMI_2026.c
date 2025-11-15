@@ -9,58 +9,31 @@
 gc9a01a_t tft;
 
 int main() {
+    // Initialize standard I/O (needed for printf debugging)
     stdio_init_all();
-    printf("GC9A01A Display Driver Test\n");
+    printf("Starting GC9A01A Minion Eye Animation...\n");
 
-    // 1. Initialize the C structure with pin numbers
+    // 1. Initialize the display structure with your chosen GPIO pin numbers
     gc9a01a_init_struct(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
 
-    // 2. Initialize the display (includes SPI setup and command sequence)
-    // We pass 40MHz as the desired frequency
-    gc9a01a_begin(&tft, 40000000);
+    // 2. Initialize the display hardware and run initialization sequence
+    gc9a01a_begin(&tft, 0); // 0 uses the default SPI_DEFAULT_FREQ (40MHz)
 
-    // 3. Set up the graphics properties
-    gc9a01a_set_rotation(&tft, 1); // Landscape mode
+    // 3. Set up the rotation (Optional, 0 is portrait, 1 is landscape)
+    gc9a01a_set_rotation(&tft, 0); 
+    
+    // 4. Draw the static part of the eye once (Goggle/White Eye/Frame)
+    printf("Drawing static eye components...\n");
+    gc9a01a_draw_minion_eye(&tft, CENTER_X, CENTER_Y);
 
-    // 4. Draw a solid color (Example of writing to the display)
-    // Set the full screen as the address window
-    gc9a01a_set_addr_window(&tft, 0, 0, tft._width, tft._height);
-
-    // Write a large block of Red color data (GC9A01A_RED is 0xF800)
-    uint16_t color = GC9A01A_RED;
-    // Prepare the pixel data (two bytes for red, repeated for a small chunk)
-    uint8_t pixel_buffer[64];
-    for (int i = 0; i < 64; i += 2) {
-        pixel_buffer[i] = (uint8_t)(color >> 8);   // MSB
-        pixel_buffer[i+1] = (uint8_t)(color & 0xFF); // LSB
-    }
-
-    // Write all pixels (240*240 total)
-    size_t total_pixels = tft._width * tft._height;
-    size_t i = 0;
-
-    // CS must be low for the entire RAMWR data stream
-    gpio_put(tft.cs_pin, 0); 
-    gpio_put(tft.dc_pin, 1); // Data mode
-
-    while (i < total_pixels * 2) { // total bytes to write
-        // Determine how many bytes to write (up to 64)
-        size_t write_len = (total_pixels * 2 - i) > 64 ? 64 : (total_pixels * 2 - i);
-        
-        // Write the chunk of data (pixels)
-        spi_write_blocking(tft.spi_instance, pixel_buffer, write_len);
-        i += write_len;
-    }
-
-    // Deselect the chip
-    gpio_put(tft.cs_pin, 1);
-
-    printf("Display filled with Red. Done.\n");
-
+    printf("Starting animation loop.\n");
+    
+    // 5. Animation Loop
     while (true) {
-        // Your main loop logic here
-        sleep_ms(1000);
+        gc9a01a_animate_eye(&tft);
     }
+    
+    return 0;
 }
 
 
