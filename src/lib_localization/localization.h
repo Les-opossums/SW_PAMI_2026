@@ -16,10 +16,6 @@ typedef struct {
     bool valid;
 } RobotPose;    
 
-typedef struct {
-    LD19DataPoint points[LD19_MAX_PTS_SCAN];
-    uint16_t count;
-} LIDARScan;
 
-RobotPose Loc_ProcessScan(const LIDARScan* scan, RobotPose* prev_pose);
+RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose);
 #endif // LOCALIZATION_H

@@ -61,7 +61,10 @@ target_include_directories(PAMI_2026 PRIVATE
 target_link_libraries(PAMI_2026 
                         pico_stdlib
                         pico_cyw43_arch_lwip_threadsafe_background
-                        pico_mbedtls              
+                        pico_mbedtls  
+                        hardware_uart
+                        pico_multicore
+                        pico_sync            
         )
 
 pico_add_extra_outputs(PAMI_2026)

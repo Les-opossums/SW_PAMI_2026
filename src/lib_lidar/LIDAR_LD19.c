@@ -1,8 +1,15 @@
 #include "../PAMI_2026.h"
 #include "LIDAR_LD19_CRC.h"
 
+static critical_section_t ld19_lock;
+static bool ld19_lock_init = false;
+
 
 void LD19_init(LD19Instance *self) {
+    if(!ld19_lock_init) {
+        critical_section_init(&ld19_lock);
+        ld19_lock_init = true;
+    }
     // Tout mettre à zéro par défaut
     memset(self, 0, sizeof(LD19Instance));
 
@@ -176,6 +183,7 @@ void LD19_computeData(LD19Instance *self) {
 
 // ====================== BUFFER SWAP ======================
 void LD19_swapBuffers(LD19Instance *self) {
+    critical_section_enter_blocking(&ld19_lock);
     if (self->currentBuffer) {
         self->currentScan = &self->scanB;
         self->previousScan = &self->scanA;
@@ -185,6 +193,11 @@ void LD19_swapBuffers(LD19Instance *self) {
     }
     self->currentBuffer = !self->currentBuffer;
     self->currentScan->index = 0;
+
+    // flag new scan available
+    self->newScan = 1;
+
+    critical_section_exit(&ld19_lock);
 }
 
 // ====================== SETTINGS ======================

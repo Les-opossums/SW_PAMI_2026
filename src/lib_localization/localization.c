@@ -21,13 +21,13 @@ static float normalize_angle(float angle) {
     return angle;
 }
 
-static float find_grid_alignement_rad(const LIDARScan *scan) {
+static float find_grid_alignement_rad(const LD19DataPointHandler *scan) {
     int bins[90] = {0}; // histogram for angles for 0 to 90 degrees
     int step = 4; // step between points to consider to get a stable vector
 
     float rad_to_bin = 90.0f / (M_PI / 2.0f); // 90 bins for 90 degrees
 
-    for (int i = 0; i < scan->count - step; i++){
+    for (int i = 0; i < scan->index - step; i++){
         // ignore invalid or out of range points
         if(scan->points[i].distance < 100 || scan->points[i].distance > 3000) continue;
 
@@ -64,12 +64,12 @@ static float find_grid_alignement_rad(const LIDARScan *scan) {
     return best_angle;
 }
 
-RobotPose Loc_ProcessScan(const LIDARScan* scan, RobotPose* prev_pose) {
+RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose) {
     RobotPose result = {0};
     result.valid = false;
 
     // safety check: don't run if not enough points
-    if (scan->count < 50) {
+    if (scan->index < 50) {
         return result;
     }
 
@@ -94,7 +94,7 @@ RobotPose Loc_ProcessScan(const LIDARScan* scan, RobotPose* prev_pose) {
     uint16_t x_hist[HIST_SIZE] = {0};
     uint16_t y_hist[HIST_SIZE] = {0};
 
-    for (int i = 0; i < scan->count; i++) {
+    for (int i = 0; i < scan->index; i++) {
         // ignore invalid or out of range points
         if(scan->points[i].distance < 50 || scan->points[i].distance > 3500) continue;
 

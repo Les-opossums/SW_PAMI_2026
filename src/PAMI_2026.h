@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "pico/multicore.h"
+#include "pico/sync.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -22,6 +24,7 @@
 
 // include for localization
 #include "lib_localization/localization.h"
+#include "lib_localization/fusion.h"
 
 // include for move
 #include "STEPPER.h"
