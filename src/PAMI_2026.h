@@ -13,9 +13,13 @@
 #include "PAMI_2026_IO.h"
 
 #include "Timer.h"
-#include "LIDAR_UART.h"
 #include "Interpreteur.h"
 #include "BAU.h"
+
+//include for LD19 LIDAR
+#include "ld19.h"
+#include "LIDAR_UART.h"
+
 
 // include for move
 #include "STEPPER.h"

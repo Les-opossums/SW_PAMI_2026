@@ -46,6 +46,7 @@
         "cstdint": "c",
         "cstddef": "c",
         "stdio.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "interpreteur.h": "c"
     }
 }

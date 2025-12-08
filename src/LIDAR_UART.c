@@ -16,4 +16,5 @@ void LIDAR_UART_init(){
 
     // Turn off FIFO's - we want to do this character by character
     uart_set_fifo_enabled(UART_ID, false);
+
 }
