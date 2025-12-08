@@ -20,6 +20,8 @@
 #include "lib_lidar/LIDAR_LD19.h"
 #include "lib_lidar/LIDAR_UART.h"
 
+// include for localization
+#include "lib_localization/localization.h"
 
 // include for move
 #include "STEPPER.h"
