@@ -17,8 +17,8 @@
 #include "BAU.h"
 
 //include for LD19 LIDAR
-#include "ld19.h"
-#include "LIDAR_UART.h"
+#include "lib_lidar/LIDAR_LD19.h"
+#include "lib_lidar/LIDAR_UART.h"
 
 
 // include for move

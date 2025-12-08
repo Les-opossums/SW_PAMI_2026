@@ -1,4 +1,4 @@
-#include "PAMI_2026.h"
+#include "../PAMI_2026.h"
 
 void LIDAR_UART_init(){
     // Set up UART

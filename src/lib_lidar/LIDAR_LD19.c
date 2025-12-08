@@ -1,5 +1,5 @@
-#include "PAMI_2026.h"
-#include "ld19crc.h"
+#include "../PAMI_2026.h"
+#include "LIDAR_LD19_CRC.h"
 
 
 void LD19_init(LD19Instance *self) {

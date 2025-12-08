@@ -36,8 +36,9 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 file(GLOB SRC_FILES src/*.c)
 file(GLOB SRC_ASSERV src/lib_asserv/*.c)
+file(GLOB SRC_LIDAR src/lib_lidar/*.c)
 add_executable(PAMI_2026 
-                ${SRC_FILES} ${SRC_ASSERV})
+                ${SRC_FILES} ${SRC_ASSERV} ${SRC_LIDAR})
 
 pico_set_program_name(PAMI_2026 "PAMI_2026")
 pico_set_program_version(PAMI_2026 "0.1")
