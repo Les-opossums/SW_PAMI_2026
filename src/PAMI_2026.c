@@ -10,7 +10,7 @@ void core1_entry() {
     LIDAR_UART_init();
     LD19_init(&LD19);
     LD19_enableFiltering(&LD19);
-    LD19_setDistanceRange(&LD19, 50, 4000); // 0.05m to 4m
+    LD19_setDistanceRange(&LD19, 100, 4000); // 0.1m to 4m
     while(1){
         LD19_readScan(&LD19, UART_ID);
     }
@@ -59,16 +59,20 @@ int main()
                     has_data = true;
                 }
                 if(has_data){
-                    RobotPose current_state = Fusion_GetState();
-                    RobotPose measured = Loc_ProcessScan(LD19.currentScan, &current_state);
+                    RobotPose current_belief = Fusion_GetState();
+                    RobotPose measured = Loc_ProcessScan(LD19.previousScan, &current_belief);
                     if (measured.valid){
                         Fusion_Correct(measured);
                     }
+
+                    // LD19_printScanTeleplot(&LD19);
                 }
 
                 RobotPose final = Fusion_GetState();
-                printf(">robot:%d:%d|xy,shape:circle,color:green\n", (int)final.x, (int)final.y);
-                printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,color:gray\n");
+                if(Timer_ms1 % 100 == 0){
+                    printf(">robot:%d:%d|xy,clr\n", (int)final.x, (int)final.y);
+                    printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
+                }
                 sequencer = 0;
                 break;
 
