@@ -131,7 +131,7 @@ void gc9a01a_render_minion_frame(gc9a01a_t *tft, int16_t pupil_x, int16_t pupil_
     gc9a01a_clear_framebuffer(GC9A01A_BLACK); 
 
     // 2. Eye Ball
-    fill_circle(120, 120, 105, EYE_WHITE);
+    fill_circle(120, 120, 120, EYE_WHITE);
 
     // 3. Detailed Iris
     fill_circle(pupil_x, pupil_y, 62, IRIS_DARK_BROWN);
