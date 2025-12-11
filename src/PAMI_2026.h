@@ -27,6 +27,7 @@
 #include "hardware/spi.h"
 #include "hardware/gpio.h"
 #include "lib_screen/GC9A01A.h"
+#include "lib_screen/minion_eye.h"
 
 // include for web socket
 #include "tcp_server.h"
