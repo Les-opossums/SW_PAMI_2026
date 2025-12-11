@@ -67,6 +67,13 @@ void gc9a01a_draw_pixel(int16_t x, int16_t y, uint16_t color);
 void gc9a01a_fill_circle(int16_t x0, int16_t y0, int16_t r, uint16_t color);
 
 // Minion Animation
-void gc9a01a_draw_minion_eye_frame(gc9a01a_t *tft, float angle_deg);
+// void gc9a01a_draw_minion_eye_frame(gc9a01a_t *tft, float angle_deg);
 
+// ... previous includes ...
+#define MINION_YELLOW 0xFFE0 // Brighter Yellow
+#define IRIS_BROWN    0x8800 // Reddish Brown
+#define PUPIL_BLACK   0x0000
+#define EYE_WHITE     0xFFFF
+// ...
+void gc9a01a_render_minion_frame(gc9a01a_t *tft, int16_t pupil_x, int16_t pupil_y, int16_t eyelid_height);
 #endif // GC9A01A_H
