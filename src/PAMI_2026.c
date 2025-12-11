@@ -26,8 +26,8 @@ int main()
     int sequencer = 0;
 
     Fusion_Init(500.0f, 500.0f, 0.0f); // init x y theta
-    // Init_All();
-    multicore_launch_core1(core1_entry);
+    Init_All();
+    // multicore_launch_core1(core1_entry);
 
     printf("PAMI-2026 ready.\n");
 
@@ -39,7 +39,7 @@ int main()
         int c;
 
         // Met à jour les moteurs pas à pas
-        // Move_Loop();
+        Move_Loop();
 
         switch (sequencer) {
             case 0:
@@ -50,29 +50,29 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                // Asserv_Loop();
+                Asserv_Loop();
                 sequencer++;
                 break;
             case 2:
-                if(LD19.newScan){
-                    LD19.newScan = 0;
-                    has_data = true;
-                }
-                if(has_data){
-                    RobotPose current_belief = Fusion_GetState();
-                    RobotPose measured = Loc_ProcessScan(LD19.previousScan, &current_belief);
-                    if (measured.valid){
-                        Fusion_Correct(measured);
-                    }
+                // if(LD19.newScan){
+                //     LD19.newScan = 0;
+                //     has_data = true;
+                // }
+                // if(has_data){
+                //     RobotPose current_belief = Fusion_GetState();
+                //     RobotPose measured = Loc_ProcessScan(LD19.previousScan, &current_belief);
+                //     if (measured.valid){
+                //         Fusion_Correct(measured);
+                //     }
 
-                    // LD19_printScanTeleplot(&LD19);
-                }
+                //     // LD19_printScanTeleplot(&LD19);
+                // }
 
-                RobotPose final = Fusion_GetState();
-                if(Timer_ms1 % 100 == 0){
-                    printf(">robot:%d:%d|xy,clr\n", (int)final.x, (int)final.y);
-                    printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
-                }
+                // RobotPose final = Fusion_GetState();
+                // if(Timer_ms1 % 100 == 0){
+                //     printf(">robot:%d:%d|xy,clr\n", (int)final.x, (int)final.y);
+                //     printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
+                // }
                 sequencer = 0;
                 break;
 

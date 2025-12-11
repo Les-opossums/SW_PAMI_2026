@@ -31,6 +31,10 @@ void init_motors() {
         motors[i].last_step_time_us = 0;
         motors[i].step_period_us = 1000; // Default to 1000us (1ms) between steps
     }
+
+    gpio_init(18);
+    gpio_set_dir(18, GPIO_OUT);
+    gpio_put(18, 0); // Enable power to stepper drivers
 }
 
 void Move_Loop(){
