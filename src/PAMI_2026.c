@@ -45,7 +45,7 @@ int main()
 
     // 2. Initialize Screen (Feature/Screen)
     gc9a01a_t tft;
-    gc9a01a_init_struct(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
+    gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
     gc9a01a_begin(&tft); // Uses default SPI_DEFAULT_FREQ (40MHz)
     minion_eye_init(&tft);
 
