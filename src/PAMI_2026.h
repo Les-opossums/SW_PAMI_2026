@@ -35,6 +35,9 @@
 #include "Asserv_Loop.h"
 #include "Cmd_For_Move.h"
 
+// include for pathfinding
+#include "lib_avoid_obstacle/pathfinding.h"
+
 // include for screen
 #include "hardware/spi.h"
 #include "hardware/gpio.h"
