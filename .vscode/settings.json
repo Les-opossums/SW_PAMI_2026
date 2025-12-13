@@ -47,6 +47,8 @@
         "cstddef": "c",
         "stdio.h": "c",
         "stdlib.h": "c",
-        "interpreteur.h": "c"
+        "interpreteur.h": "c",
+        "pami_2026_io.h": "c",
+        "foxglove_web_socket.h": "c"
     }
 }

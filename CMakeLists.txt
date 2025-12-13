@@ -38,8 +38,10 @@ file(GLOB SRC_FILES src/*.c)
 file(GLOB SRC_ASSERV src/lib_asserv/*.c)
 file(GLOB SRC_LIDAR src/lib_lidar/*.c)
 file(GLOB SRC_LOCALIZATION src/lib_localization/*.c)
+file(GLOB SRC_SCREEN src/lib_screen/*.c)
+
 add_executable(PAMI_2026 
-                ${SRC_FILES} ${SRC_ASSERV} ${SRC_LIDAR} ${SRC_LOCALIZATION})
+                ${SRC_FILES} ${SRC_ASSERV} ${SRC_LIDAR} ${SRC_LOCALIZATION} ${SRC_SCREEN})
 
 pico_set_program_name(PAMI_2026 "PAMI_2026")
 pico_set_program_version(PAMI_2026 "0.1")
@@ -63,8 +65,11 @@ target_link_libraries(PAMI_2026
                         pico_cyw43_arch_lwip_threadsafe_background
                         pico_mbedtls  
                         hardware_uart
+                        hardware_dma
+                        hardware_gpio
                         pico_multicore
                         pico_sync            
+                        hardware_spi            
         )
 
 pico_add_extra_outputs(PAMI_2026)

@@ -5,11 +5,14 @@
 #include "pico/multicore.h"
 #include "pico/sync.h"
 
+
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
 
 #include "hardware/uart.h"
+#include "hardware/irq.h"
+#include "hardware/dma.h"
 
 
 #include "PAMI_2026_IO.h"
@@ -32,6 +35,11 @@
 #include "Asserv_Loop.h"
 #include "Cmd_For_Move.h"
 
+// include for screen
+#include "hardware/spi.h"
+#include "hardware/gpio.h"
+#include "lib_screen/GC9A01A.h"
+#include "lib_screen/minion_eye.h"
 
 // include for web socket
 #include "tcp_server.h"
