@@ -19,7 +19,6 @@ A double-buffered, non-blocking DMA driver for the GC9A01A Round LCD (240x240), 
 | **RES** | Any / NC | Reset (Can use Software Reset -1) |
 | **DC** | GP16 | Data/Command |
 | **CS** | GP17 | Chip Select |
-| **BLK** | 3.3V | Backlight |
 
 ## API Reference
 
