@@ -1,7 +1,7 @@
-#define UART_ID uart0
+#define UART_ID uart1
 #define BAUD_RATE 230400
 
-#define UART_RX_PIN 13
+#define UART_RX_PIN 5
 
 
 
