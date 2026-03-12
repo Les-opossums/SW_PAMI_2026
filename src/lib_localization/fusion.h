@@ -7,7 +7,7 @@
 
 void Fusion_Init(float start_x, float start_y, float start_theta_rad);
 
-void Fusion_Predict(float v_linear, float v_angular_rad, float dt);
+void Fusion_Predict(float vx_local, float vy_local, float v_angular_rad, float dt);
 
 void Fusion_Correct(RobotPose lidar_meas);
 

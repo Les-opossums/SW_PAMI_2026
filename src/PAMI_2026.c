@@ -28,13 +28,13 @@ float ease_out_cubic(float t) {
 LD19Instance LD19;
 
 void core1_entry() {
-    // LIDAR_UART_init();
-    // LD19_init(&LD19);
-    // LD19_enableFiltering(&LD19);
-    // LD19_setDistanceRange(&LD19, 100, 4000); // 0.1m to 4m
-    // while(1){
-    //     LD19_readScan(&LD19, UART_ID);
-    // }
+    LIDAR_UART_init();
+    LD19_init(&LD19);
+    LD19_enableFiltering(&LD19);
+    LD19_setDistanceRange(&LD19, 100, 4000); // 0.1m to 4m
+    while(1){
+        LD19_readScan(&LD19, UART_ID);
+    }
 }
 
 // ==========================================
@@ -59,7 +59,7 @@ int main()
 
     
     // Launch Lidar on Core 1
-    // multicore_launch_core1(core1_entry);
+    multicore_launch_core1(core1_entry);
 
     printf("PAMI-2026 ready (Lidar + Screen).\n");
 
@@ -68,7 +68,7 @@ int main()
         // On met à jour l'animation à chaque tour de boucle
         // minion_eye_update_non_blocking();
         // --- B. Robot Logic ---
-        // bool has_data = false;
+        bool has_data = false;
         Timer_Update(); // Met à jour les timers
         int c;
 
@@ -92,27 +92,43 @@ int main()
                 }
                 sequencer++;
                 break;
-            // case 2:
-            //     if(LD19.newScan){
-            //         LD19.newScan = 0;
-            //         has_data = true;
-            //     }
-            //     if(has_data){
-            //         RobotPose current_belief = Fusion_GetState();
-            //         RobotPose measured = Loc_ProcessScan(LD19.previousScan, &current_belief);
-            //         if (measured.valid){
-            //             Fusion_Correct(measured);
-            //         }
-            //         LD19_printScanTeleplot(&LD19);
-            //     }
+            case 2:
+                if(LD19.newScan){
+                    LD19.newScan = 0;
+                    has_data = true;
+                }
+                if(has_data){
+                    // 1. On récupère la position actuelle de la fusion (EN MÈTRES)
+                    RobotPose current_belief = Fusion_GetState();
+                    
+                    // 2. On la convertit EN MILLIMÈTRES pour aider la localisation
+                    // (au cas où Loc_ProcessScan s'en sert pour filtrer ses données)
+                    RobotPose belief_for_loc = current_belief;
+                    belief_for_loc.x *= 1000.0f;
+                    belief_for_loc.y *= 1000.0f;
 
-            //     RobotPose final = Fusion_GetState();
-            //     if(Timer_ms1 % 100 == 0){
-            //         printf(">robot:%d:%d|xy,clr\n", (int)final.x, (int)final.y);
-            //         printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
-            //     }
-            //     sequencer = 0;
-            //     break;
+                    // 3. La localisation fait son calcul et sort un résultat (EN MILLIMÈTRES)
+                    RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
+                    
+                    if (measured.valid){
+                        // 4. On convertit la mesure validée EN MÈTRES avant de l'envoyer à la fusion
+                        measured.x /= 1000.0f;
+                        measured.y /= 1000.0f;
+                        
+                        Fusion_Correct(measured);
+                    }
+                    // LD19_printScanTeleplot(&LD19);
+                }
+
+                // Pour l'affichage, on reconvertit en mm si nécessaire
+                RobotPose final = Fusion_GetState();
+                if(Timer_ms1 % 100 == 0){
+                    // final.x et final.y sont en mètres, on les multiplie par 1000 pour l'affichage (si ton interface attend des mm)
+                    printf(">robot:%d:%d|xy,clr\n", (int)(final.x * 1000.0f), (int)(final.y * 1000.0f));
+                    printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
+                }
+                sequencer = 0;
+                break;
 
             default:
                 sequencer = 0;

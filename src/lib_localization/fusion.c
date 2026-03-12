@@ -30,15 +30,18 @@ void Fusion_Init(float start_x, float start_y, float start_theta_rad) {
     state.valid = true;
 }
 
-void Fusion_Predict(float v_linear, float v_angular_rad, float dt) {
-    if (!state.valid) return;
+void Fusion_Predict(float vx_local, float vy_local, float v_angular_rad, float dt) {if (!state.valid) return;
 
-    // update orientation
+    // 1. Mise à jour de l'orientation
     state.theta = normalize_angle(state.theta + v_angular_rad * dt);
 
-    // update position
-    state.x += v_linear * cosf(state.theta) * dt;
-    state.y += v_linear * sinf(state.theta) * dt;
+    // 2. Passage des vitesses locales (repère robot) au repère global
+    float cos_t = cosf(state.theta);
+    float sin_t = sinf(state.theta);
+
+    // 3. Mise à jour de la position
+    state.x += (vx_local * cos_t - vy_local * sin_t) * dt;
+    state.y += (vx_local * sin_t + vy_local * cos_t) * dt;
 }
 
 void Fusion_Correct(RobotPose lidar_meas) {

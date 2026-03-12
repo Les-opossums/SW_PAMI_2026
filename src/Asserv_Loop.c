@@ -4,7 +4,7 @@
 uint32_t Last_Timer_print_pos = 0;
 
 uint8_t auto_printpos_en = 1;
-uint16_t auto_printpos_delay = 100;
+uint16_t auto_printpos_delay = 500;
 
 uint8_t Debug_Timing = 0;
 
@@ -74,7 +74,32 @@ void Asserv_Loop(void)
         //-----------------------------------
         // speed step
         //-----------------------------------
-        odo_speed_step(ASSERV_EVERY*ODO_EVERY_MS*0.001f);
+        float dt_sec = ASSERV_EVERY * ODO_EVERY_MS * 0.001f;
+        odo_speed_step(dt_sec);
+
+        // 1. On informe la fusion du déplacement odométrique
+        Fusion_Predict(speed_robot.vx, speed_robot.vy, speed_robot.vt, dt_sec);
+
+        // 2. LISSAGE : l'odométrie rattrape la fusion en douceur
+        RobotPose truth = Fusion_GetState();
+        
+        // Calcul de l'erreur entre la vérité (Fusion) et la croyance locale (Odo)
+        float err_x = truth.x - position_robot.x;
+        float err_y = truth.y - position_robot.y;
+        
+        // On utilise ta fonction principal_angle (vue dans Odo.c) pour l'écart angulaire
+        float err_t = principal_angle(truth.theta - position_robot.t); 
+
+        // Facteur de lissage (ex: 5% de l'erreur corrigée à chaque itération)
+        // Plus c'est petit, plus le robot corrigera sa trajectoire doucement.
+        // Plus c'est grand, plus la correction sera agressive.
+        float alpha = 0.05f; 
+
+        // Application de la correction douce
+        position_robot.x += err_x * alpha;
+        position_robot.y += err_y * alpha;
+        position_robot.t = principal_angle(position_robot.t + err_t * alpha);
+
         Asserv_State = 10;
     
     } else if (Asserv_State == 10) {
