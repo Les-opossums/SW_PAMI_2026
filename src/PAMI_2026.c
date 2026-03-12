@@ -13,6 +13,9 @@
 #define LCD_DC_PIN 16
 #define LCD_RST_PIN 15 // Use -1 if you skip the reset pin
 
+int freq_robot_data_update = 20; // Hz
+int last_robot_data_update_time = 0;
+
 // --- Helper: Ease-Out Interpolation ---
 // Makes movement look organic (fast start, slow stop)
 float ease_out_cubic(float t) {
@@ -44,32 +47,33 @@ int main()
     sleep_ms(2000); // wait for stdio to be ready
 
     // 2. Initialize Screen (Feature/Screen)
-    gc9a01a_t tft;
-    gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
-    gc9a01a_begin(&tft); // Uses default SPI_DEFAULT_FREQ (40MHz)
-    minion_eye_init(&tft);
+    // gc9a01a_t tft;
+    // gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
+    // gc9a01a_begin(&tft); // Uses default SPI_DEFAULT_FREQ (40MHz)
+    // minion_eye_init(&tft);
 
     // 3. Initialize Robot Logic (HEAD)
     int sequencer = 0;
-    Fusion_Init(500.0f, 500.0f, 0.0f); // init x y theta
-    // Init_All();
+    // Fusion_Init(500.0f, 500.0f, 0.0f); // init x y theta
+    Init_All();
+
     
     // Launch Lidar on Core 1
-    multicore_launch_core1(core1_entry);
+    // multicore_launch_core1(core1_entry);
 
     printf("PAMI-2026 ready (Lidar + Screen).\n");
 
     while (true) {
         // --- A. Screen Update ---
         // On met à jour l'animation à chaque tour de boucle
-        minion_eye_update_non_blocking();
+        // minion_eye_update_non_blocking();
         // --- B. Robot Logic ---
-        bool has_data = false;
+        // bool has_data = false;
         Timer_Update(); // Met à jour les timers
         int c;
 
         // Met à jour les moteurs pas à pas
-        // Move_Loop();
+        Move_Loop();
 
         switch (sequencer) {
             case 0:
@@ -80,30 +84,34 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                // Asserv_Loop();
+                Asserv_Loop();
+                if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
+                    // printf("ROBOTDATA 1 2 3 4 5 6\n");
+                    last_robot_data_update_time = Timer_ms1;
+                }
                 sequencer++;
                 break;
-            case 2:
-                if(LD19.newScan){
-                    LD19.newScan = 0;
-                    has_data = true;
-                }
-                if(has_data){
-                    RobotPose current_belief = Fusion_GetState();
-                    RobotPose measured = Loc_ProcessScan(LD19.previousScan, &current_belief);
-                    if (measured.valid){
-                        Fusion_Correct(measured);
-                    }
-                    // LD19_printScanTeleplot(&LD19);
-                }
+            // case 2:
+            //     if(LD19.newScan){
+            //         LD19.newScan = 0;
+            //         has_data = true;
+            //     }
+            //     if(has_data){
+            //         RobotPose current_belief = Fusion_GetState();
+            //         RobotPose measured = Loc_ProcessScan(LD19.previousScan, &current_belief);
+            //         if (measured.valid){
+            //             Fusion_Correct(measured);
+            //         }
+            //         LD19_printScanTeleplot(&LD19);
+            //     }
 
-                RobotPose final = Fusion_GetState();
-                if(Timer_ms1 % 100 == 0){
-                    printf(">robot:%d:%d|xy,clr\n", (int)final.x, (int)final.y);
-                    printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
-                }
-                sequencer = 0;
-                break;
+            //     RobotPose final = Fusion_GetState();
+            //     if(Timer_ms1 % 100 == 0){
+            //         printf(">robot:%d:%d|xy,clr\n", (int)final.x, (int)final.y);
+            //         printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
+            //     }
+            //     sequencer = 0;
+            //     break;
 
             default:
                 sequencer = 0;
@@ -118,4 +126,13 @@ void Init_All(void)
 {
     init_motors();
     Init_Asserv();
+}
+
+uint8_t FREQ_Cmd(void) {
+    uint32_t val32;
+    if (Get_Param_u32(&val32)){
+        return PARAM_ERROR_CODE;
+    }
+    freq_robot_data_update = (int)val32;
+    return 0;
 }

@@ -62,3 +62,5 @@
 #define sizetab(a) (sizeof(a)/sizeof(a[0]))
 
 void Init_All(void);
+
+uint8_t FREQ_Cmd(void);

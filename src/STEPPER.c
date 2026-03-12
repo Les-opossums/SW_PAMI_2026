@@ -17,6 +17,10 @@ void init_motors() {
     motors[2].pins.dir_pin = PIN_DIR_3;
     // motors[2].pins.en_pin = 0; // disable pin
 
+    gpio_init(13);
+    gpio_set_dir(13, GPIO_OUT);
+    gpio_put(13, 1);
+
     for (int i = 0; i < NUM_MOTORS; i++) {
         gpio_init(motors[i].pins.step_pin);
         gpio_set_dir(motors[i].pins.step_pin, GPIO_OUT);
@@ -31,10 +35,6 @@ void init_motors() {
         motors[i].last_step_time_us = 0;
         motors[i].step_period_us = 1000; // Default to 1000us (1ms) between steps
     }
-
-    gpio_init(18);
-    gpio_set_dir(18, GPIO_OUT);
-    gpio_put(18, 0); // Enable power to stepper drivers
 }
 
 void Move_Loop(){
@@ -50,9 +50,17 @@ void Move_Loop(){
                 
                 if(motors[i].step_pin){
                     if(motors[i].dir_pin){
-                        motors[i].current_position++; // Move forward
+                        if(i == 1){
+                            motors[i].current_position--; // Move backward for motor 2
+                        } else {
+                            motors[i].current_position++; // Move forward for motors 1 and 3
+                        }
                     } else {
-                        motors[i].current_position--; // Move backward
+                        if(i == 1){
+                            motors[i].current_position++; // Move forward for motor 2
+                        } else {
+                            motors[i].current_position--; // Move backward for motors 1 and 3
+                        }
                     }
                 }
             }
@@ -89,7 +97,7 @@ void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
         motors[1].enabled = false;
     }else{
         motors[1].step_period_us = abs(delay_2);
-        motors[1].dir_pin = (delay_2 > 0) ? 1 : 0;
+        motors[1].dir_pin = (delay_2 > 0) ? 0 : 1;
         motors[1].enabled = true;
     }
 
@@ -99,6 +107,12 @@ void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
         motors[2].step_period_us = abs(delay_3);
         motors[2].dir_pin = (delay_3 > 0) ? 1 : 0;
         motors[2].enabled = true;
+    }
+
+    if(motors[0].enabled == true || motors[1].enabled == true || motors[2].enabled == true){
+        gpio_put(13, 0); // Enable power to stepper drivers
+    } else {
+        gpio_put(13, 1); // Disable power to stepper drivers
     }
 
 }
