@@ -1,7 +1,7 @@
 #include "lib_asserv.h"
 
 
-/******************************    Variables    *******************************/
+/****************************** Variables    *******************************/
 float robot_wheel_distance;
 
 Speed speed_robot;
@@ -16,7 +16,7 @@ int32_t cumul_step_1, cumul_step_2, cumul_step_3 = 0; // cumul des steps pour le
 
 float speed_1, speed_2, speed_3 = 0; // vitesses des roues en m/s
 
-/******************************    Fonctions    *******************************/
+/****************************** Fonctions    *******************************/
 
 // initialiser l'odometrie
 void odo_init(void) {
@@ -35,21 +35,23 @@ void odo_init(void) {
     acceleration_robot.at = 0;
 }
 
-// assigner une valeur e l'ecart entre les roues d'odometrie
+// assigner une valeur a l'ecart entre les roues d'odometrie
 void odo_set_spacing(float param_spacing) {
     robot_wheel_distance = param_spacing;
 }
 
 void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
-    //calculs des pos intermédiaires des roues 
+    // calculs des pos intermédiaires des roues 
     const float step_to_m = (DEFAULT_SIZE_WHEEL * M_PI) / (200.0f * 16.0f);  
     float delta_pos1 = (float)((int32_t)(pos1 - step_1)) * step_to_m;
     float delta_pos2 = (float)((int32_t)(pos2 - step_2)) * step_to_m;
     float delta_pos3 = (float)((int32_t)(pos3 - step_3)) * step_to_m;
 
-    // calculs du déplacement depuis le dernier step
-    float dx = (2.0f/3.0f) * (delta_pos1) - (1.0f/3.0f) * (delta_pos2 + delta_pos3);
-    float dy = (sqrtf(3.0f) / 3.0f) * (delta_pos2 - delta_pos3); // translation avant (X robot)
+    // --- NOUVELLES MATRICES DE KINEMATIQUE DIRECTE ---
+    // Axe X = Translation Avant/Arrière
+    // Axe Y = Translation Gauche/Droite
+    float dx = (sqrtf(3.0f) / 3.0f) * (delta_pos2 - delta_pos3); 
+    float dy = (1.0f / 3.0f) * (-2.0f * delta_pos1 + delta_pos2 + delta_pos3);
     float dt = -(delta_pos1 + delta_pos2 + delta_pos3) / (3.0f * robot_wheel_distance);
 
     // cumul des steps
@@ -62,7 +64,7 @@ void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
     step_2 = pos2;
     step_3 = pos3;
     
-    // maj de la position odometrique pur
+    // maj de la position odometrique pure
     float cos_t = cosf(position_robot.t);
     float sin_t = sinf(position_robot.t);
 
