@@ -39,9 +39,10 @@ file(GLOB SRC_ASSERV src/lib_asserv/*.c)
 file(GLOB SRC_LIDAR src/lib_lidar/*.c)
 file(GLOB SRC_LOCALIZATION src/lib_localization/*.c)
 file(GLOB SRC_SCREEN src/lib_screen/*.c)
+file(GLOB SRC_PATHFINDING src/lib_avoid_obstacle/*.c)
 
 add_executable(PAMI_2026 
-                ${SRC_FILES} ${SRC_ASSERV} ${SRC_LIDAR} ${SRC_LOCALIZATION} ${SRC_SCREEN})
+                ${SRC_FILES} ${SRC_ASSERV} ${SRC_LIDAR} ${SRC_LOCALIZATION} ${SRC_SCREEN} ${SRC_PATHFINDING})
 
 pico_set_program_name(PAMI_2026 "PAMI_2026")
 pico_set_program_version(PAMI_2026 "0.1")

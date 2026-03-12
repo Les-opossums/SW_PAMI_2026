@@ -74,21 +74,25 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     }
 
     // step 1 : determine heading (orientation)
-    //get the local grid alignment
     float grid_angle = find_grid_alignement_rad(scan);
-
-    // ambiguity resolution :
-    // The grid_angle doesn't know if we are at , 90 deg, 180 deg, etc.
-    // we use previous pose to resolve this ambiguity
     float step = M_PI / 2.0f; // 90 degrees
-    float base_angle = roundf((prev_pose->theta - grid_angle) / step) * step;
+    float base_angle = roundf((prev_pose->theta + grid_angle) / step) * step;
+    float global_theta = normalize_angle(base_angle - grid_angle);
 
-    // combine base + offset to get robot orientation
-    float global_theta = normalize_angle(base_angle + grid_angle);
+    // --- SÉCURITÉ ANTI-SYMÉTRIE ---
+    // On vérifie l'écart entre le cap calculé et le cap estimé (odométrie)
+    float diff_angle = global_theta - prev_pose->theta;
+    while (diff_angle < -M_PI) diff_angle += M_TWO_PI;
+    while (diff_angle > M_PI) diff_angle -= M_TWO_PI;
+
+    // Si le Lidar propose un cap aberrant (ex: saut de 90° ou 180°), on rejette la mesure
+    if (fabsf(diff_angle) > (M_PI / 4.0f)) { 
+        return result; // result.valid est toujours false ici
+    }
 
     // step 2 : rotate points to align with global frame
-    float cos_theta = cosf(-global_theta);
-    float sin_theta = sinf(-global_theta);
+    float cos_theta = cosf(global_theta);
+    float sin_theta = sinf(global_theta);
 
     // step 3 : build histograms for X and Y positions
     uint16_t x_hist[HIST_SIZE] = {0};
@@ -98,9 +102,17 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         // ignore invalid or out of range points
         if(scan->points[i].distance < 50 || scan->points[i].distance > 3500) continue;
 
-        // rotate point
-        float x_rot = scan->points[i].x * cos_theta - scan->points[i].y * sin_theta;
-        float y_rot = scan->points[i].x * sin_theta + scan->points[i].y * cos_theta;
+        // ---------------------------------------------------------
+        // CORRECTION DES AXES : On force le Lidar à correspondre à l'odométrie.
+        // L'avant du Lidar (axe Y) devient l'avant du robot (axe X).
+        // ---------------------------------------------------------
+        // 1. FORCER L'ALIGNEMENT DU CAPTEUR AVEC LE ROBOT
+        float lidar_x = scan->points[i].y;
+        float lidar_y = -scan->points[i].x;
+
+        // 2. ROTATION AVEC LES BONNES VARIABLES
+        float x_rot = lidar_x * cos_theta - lidar_y * sin_theta;
+        float y_rot = lidar_x * sin_theta + lidar_y * cos_theta;
 
         // compute histogram indices
         int x_idx = (int)(x_rot / HIST_RES) + HIST_CENTER;
@@ -180,11 +192,7 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     // CASE B : rotated 90 degrees
     else if (fabsf(span_x - TABLE_SIZE_Y) < LOC_TOLERANCE_MM &&
              fabsf(span_y - TABLE_SIZE_X) < LOC_TOLERANCE_MM) {
-        // position is distance to bottom and left walls swapped
-        result.x = -dist_to_bottom;
-        result.y = -dist_to_left;
-        result.theta = normalize_angle(global_theta + M_PI / 2.0f);
-        result.valid = true;
-        return result;
+        // Rejeter la mesure pour éviter d'inverser (effet miroir) les coordonnées X/Y
+        return result; 
     }
 }

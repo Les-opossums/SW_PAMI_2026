@@ -1,4 +1,6 @@
 #include "../PAMI_2026.h"
+#include <math.h>
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
@@ -16,13 +18,6 @@ static void limit_magnitude(float* x, float* y, float max_val) {
     }
 }
 
-// Helper: Normalize angle to -PI to +PI
-static float normalize_angle(float angle) {
-    while (angle > M_PI) angle -= 2.0f * M_PI;
-    while (angle < -M_PI) angle += 2.0f * M_PI;
-    return angle;
-}
-
 void Path_Init(void) {
     current_goal.x = 0.0f;
     current_goal.y = 0.0f;
@@ -33,117 +28,150 @@ void Path_SetGoal(float x, float y) {
     current_goal.y = y;
 }
 
-VelocityCommand Path_Compute(RobotPose current_pose, const LD19DataPointHandler* scan) {
-    VelocityCommand cmd = {0};
 
-    // --- 1. Transform Goal to Robot Local Frame ---
-    // We do this so we can sum forces in the robot's own X/Y perspective.
-    float dx_global = current_goal.x - current_pose.x;
-    float dy_global = current_goal.y - current_pose.y;
+VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float goal_vx, float goal_vy) {
+    VelocityCommand rep = {0.0f, 0.0f, 0.0f, false};
 
-    // Rotate vector by -theta to get into local frame
-    float cos_th = cosf(current_pose.theta);
-    float sin_th = sinf(current_pose.theta);
-    
-    // Local Goal Vector
-    float goal_x_local = dx_global * cos_th + dy_global * sin_th;
-    float goal_y_local = -dx_global * sin_th + dy_global * cos_th;
-
-    // Check distance to goal
-    float dist_to_goal = hypotf(goal_x_local, goal_y_local);
-    
-    if (dist_to_goal < PF_GOAL_TOLERANCE) {
-        cmd.vx = 0;
-        cmd.vy = 0;
-        cmd.omega = 0;
-        cmd.reached = true;
-        return cmd;
-    }
-
-    // --- 2. Calculate Attractive Force (Pull to goal) ---
-    float F_att_x = PF_ATTRACTIVE_GAIN * goal_x_local;
-    float F_att_y = PF_ATTRACTIVE_GAIN * goal_y_local;
-    
-    // Clamp attractive force so it doesn't dominate at long ranges
-    limit_magnitude(&F_att_x, &F_att_y, PF_MAX_SPEED);
-
-    // --- 3. Calculate Repulsive Force (Push from obstacles) ---
     float F_rep_x = 0.0f;
     float F_rep_y = 0.0f;
 
-    // Optimization: Skip points to save CPU? 
-    // RP2350 is fast enough for all 1200 points, but step=2 is safe if needed.
-    int step = 1; 
+    // Variables pour isoler l'obstacle le plus menaçant devant (pour le vortex)
+    float min_dist_front = PF_REPULSIVE_DIST;
+    float closest_front_x = 0.0f;
+    float closest_front_y = 0.0f;
+    int obs_in_front = 0;
 
-    for (int i = 0; i < scan->index; i += step) {
-        float ox = scan->points[i].x;
-        float oy = scan->points[i].y;
-        float dist = scan->points[i].distance; // Already in mm
-
-        // Ignore noise (too close) or far away points
+    for (int i = 0; i < scan->index; i++) {
+        float dist = scan->points[i].distance;
+        
+        // Ignorer le bruit et ce qui est hors de portée
         if (dist < 50.0f || dist > PF_REPULSIVE_DIST) continue;
 
-        // Vector from Obstacle -> Robot (which is at 0,0 locally)
-        // So vector is just (-ox, -oy)
-        // Normalize: u_x = -ox / dist
-        
-        // Repulsive strength: proportional to (1/dist - 1/R)^2
-        // We simplify calculation for speed:
-        // Force = Gain * (R - dist) / (dist * dist)
-        float rep_factor = (PF_REPULSIVE_DIST - dist);
-        // Using squared distance in denominator for stronger reaction when very close
-        float force_mag = PF_REPULSIVE_GAIN * (rep_factor / (dist * dist));
+        // Repère local : x = Avant, y = Gauche
+        float obs_x = scan->points[i].y; 
+        float obs_y = -scan->points[i].x;
 
-        // Standard Repulsion Vector (push away)
-        float rx = (-ox / dist) * force_mag;
-        float ry = (-oy / dist) * force_mag;
+        // Vecteur unitaire fuyant le point
+        float rx = -obs_x / dist;
+        float ry = -obs_y / dist;
 
-        // Vortex Field (Tangent)
-        // To avoid local minima, we add a force perpendicular to the obstacle.
-        // If the goal is to the "left" of the obstacle, rotate force left, else right.
-        // Simple heuristic: Rotate 90 degrees based on cross product sign with goal.
-        
-        // Cross product z = (goal_x * oy - goal_y * ox)
-        // If z > 0, goal is "left" of obstacle vector -> swirl Clockwise? 
-        // Let's just add a constant swirl to the right for consistency or adaptive.
-        // Adaptive Swirl:
-        float cross_prod = goal_x_local * oy - goal_y_local * ox;
-        float swirl_sign = (cross_prod > 0) ? 1.0f : -1.0f;
+        // Calcul de la force pure. 
+        float force = PF_REPULSIVE_GAIN / (dist * dist);
+        if (force > 50.0f) force = 50.0f; // Limite de stabilité par point
 
-        // Rotate repulsion vector 90 degrees: (x, y) -> (-y, x) * sign
-        float vx = -ry * swirl_sign * PF_VORTEX_GAIN;
-        float vy =  rx * swirl_sign * PF_VORTEX_GAIN;
+        F_rep_x += rx * force;
+        F_rep_y += ry * force;
 
-        F_rep_x += (rx + vx);
-        F_rep_y += (ry + vy);
+        // Recherche du point le plus proche UNIQUEMENT devant le robot pour le vortex
+        if (obs_x > 0.0f) {
+            if (dist < min_dist_front) {
+                min_dist_front = dist;
+                closest_front_x = obs_x;
+                closest_front_y = obs_y;
+            }
+            obs_in_front++;
+        }
     }
 
-    // --- 4. Sum Forces ---
-    float F_total_x = F_att_x + F_rep_x;
-    float F_total_y = F_att_y + F_rep_y;
+    // =========================================================
+    // Hystérésis (Mémoire du sens d'esquive)
+    // =========================================================
+    static float locked_swirl_sign = 1.0f;
+    static int is_avoiding = 0;
 
-    // --- 5. Convert Force to Velocity Command ---
-    // For a holonomic robot, Force vector ~~ Velocity vector (mass = 1)
-    
-    // Limit Max Linear Speed
+    // S'il n'y a aucune force de répulsion, on reset
+    if (F_rep_x == 0.0f && F_rep_y == 0.0f) {
+        is_avoiding = 0; 
+        return rep;
+    }
+
+    // =========================================================
+    // Calcul du Vortex intelligent (Basé sur le point le plus proche)
+    // =========================================================
+    float vortex_x = 0.0f;
+    float vortex_y = 0.0f;
+
+    if (obs_in_front > 0) {
+        // CORRECTION ICI : La force du vortex est proportionnelle à l'obstacle + bridée
+        float base_force = PF_REPULSIVE_GAIN / (min_dist_front * min_dist_front);
+        if (base_force > 50.0f) base_force = 50.0f; 
+        float v_force = base_force * PF_VORTEX_GAIN;
+        
+        // Vecteur unitaire fuyant l'obstacle frontal le plus proche
+        float rx = -closest_front_x / min_dist_front;
+        float ry = -closest_front_y / min_dist_front;
+
+        if (is_avoiding == 0) {
+            // Produit vectoriel pour choisir le côté vers la cible
+            float cross_prod = goal_vx * ry - goal_vy * rx;
+            locked_swirl_sign = (cross_prod >= 0.0f) ? -1.0f : 1.0f;
+            is_avoiding = 1;
+        }
+
+        // Rotation à 90 degrés du vecteur de fuite
+        vortex_x = -ry * locked_swirl_sign * v_force;
+        vortex_y =  rx * locked_swirl_sign * v_force;
+    } else {
+        // Plus d'obstacle devant, on désactive le vortex
+        is_avoiding = 0;
+    }
+
+    // =========================================================
+    // Somme finale (SANS PLAFOND POUR LAISSER LE MUR GAGNER)
+    // =========================================================
+    float total_x = F_rep_x + vortex_x;
+    float total_y = F_rep_y + vortex_y;
+
+    // SUPPRESSION du bridage MAX_TOTAL_SPEED ici. 
+    // La répulsion a désormais le droit de valoir 1000 ou 2000 si on est collé au mur.
+
+    rep.vx = total_x;
+    rep.vy = total_y;
+
+    return rep;
+}
+
+VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan) {
+    VelocityCommand cmd = {0.0f, 0.0f, 0.0f, false};
+
+    // --- 1. Force Attractive (Vers la cible) ---
+    float dx_global = current_goal.x - current_pose.x;
+    float dy_global = current_goal.y - current_pose.y;
+    float distance_to_goal = sqrtf(dx_global * dx_global + dy_global * dy_global);
+
+    if (distance_to_goal < PF_GOAL_TOLERANCE) {
+        cmd.reached = true;
+        return cmd; 
+    }
+
+    float cos_theta = cosf(current_pose.theta);
+    float sin_theta = sinf(current_pose.theta);
+    float dx_local = dx_global * cos_theta + dy_global * sin_theta;
+    float dy_local = -dx_global * sin_theta + dy_global * cos_theta;
+
+    float F_att_x = dx_local * PF_ATTRACTIVE_GAIN;
+    float F_att_y = dy_local * PF_ATTRACTIVE_GAIN;
+
+    // CORRECTION MAJEURE : On bride l'attraction ! 
+    // L'envie d'aller vers la cible ne doit jamais dépasser la vitesse max.
+    // Ainsi, une répulsion forte d'un mur proche pourra la surpasser.
+    limit_magnitude(&F_att_x, &F_att_y, PF_MAX_SPEED);
+
+    // --- 2. Force Répulsive & Vortex (Contre les obstacles) ---
+    VelocityCommand rep = Path_GetRepulsionVector(scan, dx_local, dy_local);
+
+    // --- 3. Somme des forces ---
+    float F_total_x = F_att_x + rep.vx;
+    float F_total_y = F_att_y + rep.vy;
+
+    // --- 4. Conversion en vitesse de consigne ---
+    // C'est seulement à la toute fin qu'on protège les moteurs pour ne pas demander 
+    // une consigne absurde s'il fuit très vite.
     limit_magnitude(&F_total_x, &F_total_y, PF_MAX_SPEED);
 
     cmd.vx = F_total_x;
     cmd.vy = F_total_y;
+    cmd.omega = 0.0f; 
 
-    // --- 6. Angular Velocity (Face the direction of motion) ---
-    // Holonomic robots can move in X/Y while facing any theta. 
-    // Usually, it's safer to face the direction of movement or face the goal.
-    // Strategy: Face the Goal.
-    float target_heading = atan2f(goal_y_local, goal_x_local); // Angle relative to robot front
-    
-    // Proportional control for rotation
-    cmd.omega = 2.0f * target_heading; 
-    
-    // Clamp rotation
-    if (cmd.omega > PF_MAX_ROTATION) cmd.omega = PF_MAX_ROTATION;
-    if (cmd.omega < -PF_MAX_ROTATION) cmd.omega = -PF_MAX_ROTATION;
-
-    cmd.reached = false;
     return cmd;
 }

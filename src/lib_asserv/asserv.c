@@ -170,7 +170,7 @@ void pos_asserv_step(void) {
     float y_o = Wanted_Pos.y;
     float t_o = Wanted_Pos.t;
 
-    // --- État actuel
+    // --- État actuel (Maintenant correct grâce au main!)
     float x = position_robot.x;
     float y = position_robot.y;
     float t = position_robot.t;
@@ -186,19 +186,30 @@ void pos_asserv_step(void) {
 
     float angle = atan2f(rdy, rdx);
 
-    // --- Calcul de la vitesse radiale
-    float speed_order_d = radial_speed_calculation(d); // vitesse de consigne radiale
+    // --- Calcul de la vitesse radiale (Attraction naturelle vers la cible)
+    float speed_order_d = radial_speed_calculation(d); 
     
     // Décomposition en X/Y monde
     float vx_world = speed_order_d * cosf(angle);
     float vy_world = speed_order_d * sinf(angle);
 
-    // Transformation vers repère robot
+    // Transformation vers repère robot (Vitesse idéale s'il n'y avait pas d'obstacles)
     speed_order.vx = vx_world * cos_t + vy_world * sin_t;
-    speed_order.vy = - vx_world * sin_t + vy_world * cos_t;
+    speed_order.vy = -vx_world * sin_t + vy_world * cos_t;
+
+    // ========================================================
+    // --- PATHFINDING : Ajout de la Répulsion ---
+    // ========================================================
+    // Note : LD19.previousScan est déjà un pointeur, pas besoin de '&'
+    VelocityCommand repulsion = Path_GetRepulsionVector(LD19.previousScan, speed_order.vx, speed_order.vy);
+    
+    // On dévie la vitesse idéale avec la force de répulsion
+    speed_order.vx += repulsion.vx;
+    speed_order.vy += repulsion.vy;
+    // ========================================================
 
     // --- Calcul de la vitesse angulaire
-    speed_order.vt =  angular_speed_calculation(dt);
+    speed_order.vt = angular_speed_calculation(dt);
 
     // --- Stop condition globale (position + angle atteints)
     if ((d < current_stop_distance) && (fabs(dt) < DEFAULT_STOP_ANGLE)) {

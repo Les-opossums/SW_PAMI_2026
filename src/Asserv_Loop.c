@@ -4,7 +4,7 @@
 uint32_t Last_Timer_print_pos = 0;
 
 uint8_t auto_printpos_en = 1;
-uint16_t auto_printpos_delay = 500;
+uint16_t auto_printpos_delay = 100;
 
 uint8_t Debug_Timing = 0;
 
@@ -93,7 +93,7 @@ void Asserv_Loop(void)
         // Facteur de lissage (ex: 5% de l'erreur corrigée à chaque itération)
         // Plus c'est petit, plus le robot corrigera sa trajectoire doucement.
         // Plus c'est grand, plus la correction sera agressive.
-        float alpha = 0.05f; 
+        float alpha = 0.1f; 
 
         // Application de la correction douce
         position_robot.x += err_x * alpha;
