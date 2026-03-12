@@ -9,9 +9,9 @@
 #define BLINK_CLOSE_Y 110  // How far eyelids close (120 = fully closed)
 
 // Pin configuration
-#define LCD_CS_PIN 17
-#define LCD_DC_PIN 16
-#define LCD_RST_PIN 15 // Use -1 if you skip the reset pin
+// #define LCD_CS_PIN 17
+// #define LCD_DC_PIN 16
+// #define LCD_RST_PIN 15 // Use -1 if you skip the reset pin
 
 int freq_robot_data_update = 20; // Hz
 int last_robot_data_update_time = 0;
@@ -28,13 +28,13 @@ float ease_out_cubic(float t) {
 LD19Instance LD19;
 
 void core1_entry() {
-    LIDAR_UART_init();
-    LD19_init(&LD19);
-    LD19_enableFiltering(&LD19);
-    LD19_setDistanceRange(&LD19, 100, 4000); // 0.1m to 4m
-    while(1){
-        LD19_readScan(&LD19, UART_ID);
-    }
+    // LIDAR_UART_init();
+    // LD19_init(&LD19);
+    // LD19_enableFiltering(&LD19);
+    // LD19_setDistanceRange(&LD19, 100, 4000); // 0.1m to 4m
+    // while(1){
+    //     LD19_readScan(&LD19, UART_ID);
+    // }
 }
 
 // ==========================================
@@ -87,6 +87,7 @@ int main()
                 Asserv_Loop();
                 if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
                     // printf("ROBOTDATA 1 2 3 4 5 6\n");
+
                     last_robot_data_update_time = Timer_ms1;
                 }
                 sequencer++;
