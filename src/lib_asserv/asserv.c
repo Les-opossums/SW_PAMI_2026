@@ -175,6 +175,14 @@ float field_radius = 220.0f;
 float avoid_radius = 80.0f;
 
 void pos_asserv_step(void) {
+    if (LD19.previousScan != NULL) {
+        float dbg_min = 9999.0f;
+        for (int i = 0; i < LD19.previousScan->index; i++) {
+            float d = LD19.previousScan->points[i].distance;
+            if (d > 10.0f && d < dbg_min) dbg_min = d;
+        }
+        printf("DBG idx=%d min_d=%.0fmm\n", LD19.previousScan->index, dbg_min);
+    }
     // --- Consignes
     float x_o = Wanted_Pos.x;
     float y_o = Wanted_Pos.y;
@@ -203,33 +211,47 @@ void pos_asserv_step(void) {
     float vx_world = speed_order_d * cosf(angle);
     float vy_world = speed_order_d * sinf(angle);
 
-    // Transformation vers repère robot (Vitesse idéale s'il n'y avait pas d'obstacles)
     speed_order.vx = vx_world * cos_t + vy_world * sin_t;
     speed_order.vy = -vx_world * sin_t + vy_world * cos_t;
 
-    float absolute_min_dist = field_radius;
+    // Vitesse nominale vers la cible (sans réduction pour l'instant)
+    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED);
+
+    float dbg_norm = sqrtf(speed_order.vx*speed_order.vx + speed_order.vy*speed_order.vy);
+    printf("DBG speed_norm=%.1f vx=%.1f vy=%.1f\n", dbg_norm, speed_order.vx, speed_order.vy);
+    
+    // Déviation directionnelle — la norme est conservée, pas réduite
+    VelocityCommand deflected = Path_GetRepulsionVector(LD19.previousScan,
+                                                        speed_order.vx,
+                                                        speed_order.vy);
+    speed_order.vx = deflected.vx;
+    speed_order.vy = deflected.vy;
+
+    // Réduction de vitesse APRÈS déviation, uniquement sur la composante d'approche
+    // → le robot continue à se déplacer latéralement vite, mais freine l'avance
+    float absolute_min_dist = 9999.0f;
     for (int i = 0; i < LD19.previousScan->index; i++) {
         float d = LD19.previousScan->points[i].distance;
         if (d > 20.0f && d < absolute_min_dist) absolute_min_dist = d;
     }
 
     if (absolute_min_dist < field_radius) {
-        // Vitesse proportionnelle à la distance : 100% à field_radius, ~20% à avoid_radius
-        float speed_factor = (absolute_min_dist - avoid_radius) / (field_radius - avoid_radius);
-        if (speed_factor < 0.2f) speed_factor = 0.2f;
-        if (speed_factor > 1.0f) speed_factor = 1.0f;
-        limit_magnitude(&speed_order.vx, &speed_order.vy,
-                        PF_MAX_SPEED * speed_factor);
-    } else {
-        limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED);
-    }
+        float brake = (absolute_min_dist - avoid_radius) / (field_radius - avoid_radius);
+        if (brake < 0.0f) brake = 0.0f;
+        if (brake > 1.0f) brake = 1.0f;
+        brake = brake * brake; // quadratique : doux au loin, fort au proche
 
-    // --- Déviation directionnelle ---
-    VelocityCommand deflected = Path_GetRepulsionVector(LD19.previousScan,
-                                                        speed_order.vx,
-                                                        speed_order.vy);
-    speed_order.vx = deflected.vx;
-    speed_order.vy = deflected.vy;
+        // Vecteur unitaire vers l'obstacle le plus proche (dans repère robot)
+        // On projette speed_order sur cet axe et on réduit uniquement cette composante
+        // Si on n'a pas le point exact, approximation : on réduit le vecteur global
+        float current_norm = sqrtf(speed_order.vx*speed_order.vx + speed_order.vy*speed_order.vy);
+        float max_approach = PF_MAX_SPEED * (0.15f + 0.85f * brake); // 15% min, 100% loin
+        if (current_norm > max_approach) {
+            float scale = max_approach / current_norm;
+            speed_order.vx *= scale;
+            speed_order.vy *= scale;
+        }
+    }
     // ========================================================
 
     // --- Calcul de la vitesse angulaire

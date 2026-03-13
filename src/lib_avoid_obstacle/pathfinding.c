@@ -28,9 +28,10 @@ void Path_SetGoal(float x, float y) {
     current_goal.y = y;
 }
 
-
 VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float goal_vx, float goal_vy) {
-    VelocityCommand rep = {goal_vx, goal_vy, 0.0f, false}; // Par défaut : on retourne le vecteur intact
+    VelocityCommand rep = {goal_vx, goal_vy, 0.0f, false};
+
+    if (scan == NULL || scan->index == 0) return rep;
 
     float g_norm = sqrtf(goal_vx * goal_vx + goal_vy * goal_vy);
     if (g_norm < 0.01f) return rep;
@@ -38,66 +39,97 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
     float norm_gx = goal_vx / g_norm;
     float norm_gy = goal_vy / g_norm;
 
+    float field_radius = 300.0f;
     float avoid_radius = 80.0f;
-    float field_radius = 220.0f;
+
+    // Vitesse minimale garantie pendant l'évitement actif
+    // Empêche qu'une faible vitesse vers la goal rende la déviation imperceptible
+    // À calibrer : 50% de ta vitesse nominale typique
+    static const float MIN_AVOID_SPEED = 0.35f;
 
     float min_d = field_radius;
-    float obs_x = 0.0f, obs_y = 0.0f;
-    int   threat_found = 0;
     float cross_sum = 0.0f;
+    int found = 0;
 
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
-        if (d < 10.0f) continue;
-        if (d < 25.0f) d = 25.0f;
+        if (d < 10.0f || d >= field_radius) continue;
 
-        float px =  scan->points[i].x;
-        float py = -scan->points[i].y;
+        float px = scan->points[i].x;
+        float py = scan->points[i].y;
+
         float dot = px * norm_gx + py * norm_gy;
+        if (dot < -30.0f) continue;
 
-        if (dot > -20.0f && d < field_radius) {
-            if (d < min_d) {
-                min_d = d; obs_x = px; obs_y = py;
-                threat_found = 1;
-            }
-            cross_sum += norm_gx * py - norm_gy * px;
+        cross_sum += norm_gx * py - norm_gy * px;
+
+        if (d < min_d) {
+            min_d = d;
+            found = 1;
         }
     }
 
-    static float swirl_sign = 1.0f;
-    static int   is_avoiding = 0;
-    static int   free_cycles = 0;
-    static const int EXIT_DELAY = 15;
+    static float swirl_sign    = 1.0f;
+    static int   is_avoiding   = 0;
+    static int   free_cycles   = 0;
+    static float filtered_cross = 0.0f;
+    static const int   EXIT_DELAY  = 25;
+    // Seuil d'hystérésis : doit être >> bruit (~250 dans tes logs)
+    // mais < signal d'un vrai nouvel obstacle (~3000 pour un mur)
+    // → 800 est un bon compromis, ajuste si besoin
+    static const float HYSTERESIS  = 800.0f;
 
-    if (threat_found) {
+    if (found) {
         free_cycles = 0;
+
+        // Filtre passe-bas : lisse les oscillations rapides de cross_sum
+        filtered_cross = filtered_cross * 0.75f + cross_sum * 0.25f;
+
         if (!is_avoiding) {
-            swirl_sign  = (cross_sum > 0.0f) ? 1.0f : -1.0f;
+            // Fixe le signe UNE SEULE FOIS à l'entrée de l'évitement
+            swirl_sign  = (filtered_cross >= 0.0f) ? -1.0f : 1.0f;
             is_avoiding = 1;
+        } else {
+            // Autorise le flip UNIQUEMENT si un obstacle est CLAIREMENT
+            // de l'autre côté (nouveau mur, pas du bruit autour de 0)
+            if (swirl_sign > 0.0f && filtered_cross > +HYSTERESIS) {
+                swirl_sign = -1.0f;
+            } else if (swirl_sign < 0.0f && filtered_cross < -HYSTERESIS) {
+                swirl_sign = +1.0f;
+            }
+            // Sinon : signe verrouillé, pas d'oscillation
         }
 
-        // t_factor : 0 à la lisière du champ, 1 au contact de l'obstacle
-        float t_factor = (field_radius - min_d) / (field_radius - avoid_radius);
-        if (t_factor < 0.0f) t_factor = 0.0f;
-        if (t_factor > 1.0f) t_factor = 1.0f;
+        float t = (field_radius - min_d) / (field_radius - avoid_radius);
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
 
-        // Déviation max = 90° quand collé à l'obstacle, 0° à field_radius
-        // On peut monter à (M_PI * 0.6f) si 90° ne suffit pas à contourner
-        float deflection = swirl_sign * (M_PI_2)* 0.65 * t_factor;
+        float deflection = swirl_sign * (M_PI * 0.60f) * t;
+
+        // Vitesse effective : si le robot est presque à sa goal (vitesse faible),
+        // on impose un minimum pour que la rotation ait un effet réel
+        float effective_norm = g_norm;
+        if (effective_norm < MIN_AVOID_SPEED && t > 0.15f) {
+            effective_norm = MIN_AVOID_SPEED;
+        }
+
+        float eff_vx = norm_gx * effective_norm;
+        float eff_vy = norm_gy * effective_norm;
 
         float cos_d = cosf(deflection);
         float sin_d = sinf(deflection);
 
-        // Rotation du vecteur objectif — la norme est CONSERVÉE
-        rep.vx = goal_vx * cos_d - goal_vy * sin_d;
-        rep.vy = goal_vx * sin_d + goal_vy * cos_d;
+        rep.vx = eff_vx * cos_d - eff_vy * sin_d;
+        rep.vy = eff_vx * sin_d + eff_vy * cos_d;
 
+        printf("DBG avoid: min_d=%.0f t=%.2f angle=%.1fdeg sign=%.0f raw=%.0f filt=%.0f\n",
+               min_d, t, deflection * 180.0f / M_PI, swirl_sign, cross_sum, filtered_cross);
     } else {
         free_cycles++;
         if (free_cycles >= EXIT_DELAY) {
-            is_avoiding = 0;
+            is_avoiding     = 0;
+            filtered_cross  = 0.0f; // Reset propre pour la prochaine rencontre
         }
-        // rep = {goal_vx, goal_vy} — déjà initialisé en haut
     }
 
     return rep;
