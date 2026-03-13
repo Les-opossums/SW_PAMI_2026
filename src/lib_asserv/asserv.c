@@ -170,25 +170,13 @@ void speed_asserv_break_step(void) {
     }
 }
 
-float old_angle = 0;
-float field_radius = 220.0f;
-float avoid_radius = 80.0f;
-
 void pos_asserv_step(void) {
-    if (LD19.previousScan != NULL) {
-        float dbg_min = 9999.0f;
-        for (int i = 0; i < LD19.previousScan->index; i++) {
-            float d = LD19.previousScan->points[i].distance;
-            if (d > 10.0f && d < dbg_min) dbg_min = d;
-        }
-        printf("DBG idx=%d min_d=%.0fmm\n", LD19.previousScan->index, dbg_min);
-    }
     // --- Consignes
     float x_o = Wanted_Pos.x;
     float y_o = Wanted_Pos.y;
     float t_o = Wanted_Pos.t;
 
-    // --- État actuel (Maintenant correct grâce au main!)
+    // --- État actuel
     float x = position_robot.x;
     float y = position_robot.y;
     float t = position_robot.t;
@@ -196,68 +184,44 @@ void pos_asserv_step(void) {
     // --- Erreurs
     float rdx = x_o - x;
     float rdy = y_o - y;
-    float d = sqrtf(rdx*rdx + rdy*rdy);             // Erreur positionnelle
-    float dt = principal_angle(t_o - t);            // Erreur angulaire
+    float d = sqrtf(rdx*rdx + rdy*rdy);
+    float dt = principal_angle(t_o - t);
 
     float cos_t = cosf(t);
     float sin_t = sinf(t);
-
     float angle = atan2f(rdy, rdx);
 
-    // --- Calcul de la vitesse radiale (Attraction naturelle vers la cible)
+    // ==========================================
+    // 1. FORCE D'ATTRACTION (Ton code d'origine intact !)
+    // ==========================================
     float speed_order_d = radial_speed_calculation(d); 
     
-    // Décomposition en X/Y monde
     float vx_world = speed_order_d * cosf(angle);
     float vy_world = speed_order_d * sinf(angle);
 
-    speed_order.vx = vx_world * cos_t + vy_world * sin_t;
-    speed_order.vy = -vx_world * sin_t + vy_world * cos_t;
+    // Transformation vers repère robot (Force locale qui tire vers la cible)
+    float att_vx_local = vx_world * cos_t + vy_world * sin_t;
+    float att_vy_local = - vx_world * sin_t + vy_world * cos_t;
 
-    // Vitesse nominale vers la cible (sans réduction pour l'instant)
-    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED);
-
-    float dbg_norm = sqrtf(speed_order.vx*speed_order.vx + speed_order.vy*speed_order.vy);
-    printf("DBG speed_norm=%.1f vx=%.1f vy=%.1f\n", dbg_norm, speed_order.vx, speed_order.vy);
+    // ==========================================
+    // 2. FORCE DE RÉPULSION (LiDAR)
+    // ==========================================
+    float rep_vx_local = 0.0f;
+    float rep_vy_local = 0.0f;
     
-    // Déviation directionnelle — la norme est conservée, pas réduite
-    VelocityCommand deflected = Path_GetRepulsionVector(LD19.previousScan,
-                                                        speed_order.vx,
-                                                        speed_order.vy);
-    speed_order.vx = deflected.vx;
-    speed_order.vy = deflected.vy;
+    // 🔥 POUR TESTER : Si tu remplaces LD19.previousScan par NULL ici, 
+    // le robot DOIT bouger exactement comme avant.
+    Path_GetRepulsionVector(LD19.previousScan, &rep_vx_local, &rep_vy_local);
 
-    // Réduction de vitesse APRÈS déviation, uniquement sur la composante d'approche
-    // → le robot continue à se déplacer latéralement vite, mais freine l'avance
-    float absolute_min_dist = 9999.0f;
-    for (int i = 0; i < LD19.previousScan->index; i++) {
-        float d = LD19.previousScan->points[i].distance;
-        if (d > 20.0f && d < absolute_min_dist) absolute_min_dist = d;
-    }
-
-    if (absolute_min_dist < field_radius) {
-        float brake = (absolute_min_dist - avoid_radius) / (field_radius - avoid_radius);
-        if (brake < 0.0f) brake = 0.0f;
-        if (brake > 1.0f) brake = 1.0f;
-        brake = brake * brake; // quadratique : doux au loin, fort au proche
-
-        // Vecteur unitaire vers l'obstacle le plus proche (dans repère robot)
-        // On projette speed_order sur cet axe et on réduit uniquement cette composante
-        // Si on n'a pas le point exact, approximation : on réduit le vecteur global
-        float current_norm = sqrtf(speed_order.vx*speed_order.vx + speed_order.vy*speed_order.vy);
-        float max_approach = PF_MAX_SPEED * (0.15f + 0.85f * brake); // 15% min, 100% loin
-        if (current_norm > max_approach) {
-            float scale = max_approach / current_norm;
-            speed_order.vx *= scale;
-            speed_order.vy *= scale;
-        }
-    }
-    // ========================================================
-
-    // --- Calcul de la vitesse angulaire
+    // ==========================================
+    // 3. FUSION APF
+    // ==========================================
+    speed_order.vx = att_vx_local + rep_vx_local;
+    speed_order.vy = att_vy_local + rep_vy_local;
     speed_order.vt = angular_speed_calculation(dt);
+    
 
-    // --- Stop condition globale (position + angle atteints)
+    // --- Stop condition globale
     if ((d < current_stop_distance) && (fabs(dt) < DEFAULT_STOP_ANGLE)) {
         motion_free();
         printf("Pos,done\n");
