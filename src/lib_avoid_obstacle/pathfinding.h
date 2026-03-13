@@ -22,7 +22,7 @@
 
 
 #define PF_MIN_DIST 220.0f
-#define PF_SURVIVAL_DIST 110.0f
+#define PF_SURVIVAL_DIST 130.0f
 #define PF_FORCE_MAG 1.0f
 #define PF_MAX_REPULSION 200.0f 
 

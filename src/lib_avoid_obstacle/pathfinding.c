@@ -52,27 +52,30 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
 
-        if(d < 20.0f ) continue; // Ignorer les points très proches (bruit)
+        if(d < 10.0f ) continue; // Ignorer les points très proches (bruit)
+
+        if (d < 25.0f) d = 25.0f; // Éviter les forces extrêmes dues à des mesures très proches
 
         float px = scan->points[i].y;
         float py = -scan->points[i].x;
 
-
+        float dot = (px * goal_vx) + (py * goal_vy);
         // ==================================================
         // A. SURVIE : est ce le point le plus proche autour du robot ?
         // ==================================================
         if (d < survival_radius){
-            float force = 2.0f * (survival_radius - d);
+            if(dot < -20.0f){
+                float force = 4.0f * (survival_radius - d);
 
-            shield_x += (-px / d) * force;
-            shield_y += (-py / d) * force;
+                shield_x += (-px / d) * force;
+                shield_y += (-py / d) * force;
+            }
         }
 
         // ==================================================
         // B. Navigation : est ce le point le plus proche dans la direction du but ?
         // ==================================================
         if (d < min_dist_front){
-            float dot = (px * goal_vx) + (py * goal_vy);
             if(dot < -10.0f){
                 if(d < min_dist_front){
                     min_dist_front = d;
