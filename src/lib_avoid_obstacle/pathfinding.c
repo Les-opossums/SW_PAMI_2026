@@ -32,6 +32,14 @@ void Path_SetGoal(float x, float y) {
 VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float goal_vx, float goal_vy) {
     VelocityCommand rep = {0.0f, 0.0f, 0.0f, false};
 
+    float g_norm = sqrtf(goal_vx * goal_vx + goal_vy * goal_vy);
+    if (g_norm > 0.01f) {
+        goal_vx /= g_norm;
+        goal_vy /= g_norm;
+    }else{
+        return rep; 
+    }
+
     float min_dist = PF_MIN_DIST;
     float obs_x = 0.0f;
     float obs_y = 0.0f;
@@ -40,10 +48,17 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
         if(d > 20.0f && d < min_dist){
-            min_dist = d;
-            obs_x = scan->points[i].y;
-            obs_y = -scan->points[i].x;
-            threat_found = 1;
+            float px = scan->points[i].y;
+            float py = -scan->points[i].x;
+
+            float dot = (px * goal_vx) + (py * goal_vy);
+            if(dot  < -20.0f){
+                min_dist = d;
+                obs_x = px;
+                obs_y = py;
+                threat_found = 1;
+            }
+
         }
     }
 
@@ -55,7 +70,7 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         return rep;
     }
 
-    float force_mag= 1.0f * (300.0f - min_dist);
+    float force_mag= PF_FORCE_MAG * (PF_MIN_DIST - min_dist);
     if (force_mag > 500.0f) force_mag = 500.0f;
 
     float rx = -obs_x /min_dist;
