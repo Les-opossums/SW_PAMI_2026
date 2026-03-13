@@ -13,7 +13,6 @@
 #define PF_REPULSIVE_GAIN     1500.0f  // 2 millions (car on divise par d^2)
 #define PF_VORTEX_GAIN        1.2f        // Gain normalisé, 1.0 suffit pour glisser
 
-#define PF_MAX_REPULSION 450.0f 
 
 
 #define PF_ROBOT_RADIUS 150.0f
@@ -24,6 +23,8 @@
 
 #define PF_MIN_DIST 220.0f
 #define PF_FORCE_MAG 1.0f
+#define PF_MAX_REPULSION 400.0f 
+
 
 typedef struct {
     float vx;       // Linear Velocity X (mm/s) in Robot Frame

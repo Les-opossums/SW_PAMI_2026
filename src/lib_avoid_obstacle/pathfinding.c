@@ -45,22 +45,44 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
     float obs_y = 0.0f;
     int threat_found = 0;
 
+    // bouclier global
+    float F_rep_total_x = 0.0f;
+    float F_rep_total_y = 0.0f;
+
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
         if(d > 20.0f && d < min_dist){
             float px = scan->points[i].y;
             float py = -scan->points[i].x;
 
+
+            // ==================================================
+            // A. BOUCLIER GLOBAL (on fuit tous les points proches)
+            // ==================================================
+            float rep_force = (PF_FORCE_MAG * (PF_MIN_DIST - d)) * 0.1;
+
+            F_rep_total_x += (-px / d) * rep_force;
+            F_rep_total_y += (-py / d) * rep_force;
+
+            // ==================================================
+            // B. FILTRE VORTEX
+            // ==================================================
+
             float dot = (px * goal_vx) + (py * goal_vy);
             if(dot  < 10.0f){
-                min_dist = d;
-                obs_x = px;
-                obs_y = py;
-                threat_found = 1;
+                if(d < min_dist){
+                    min_dist = d;
+                    obs_x = px;
+                    obs_y = py;
+                    threat_found = 1;
+                }
+                
             }
 
         }
     }
+
+    limit_magnitude(&F_rep_total_x, &F_rep_total_y, PF_MAX_REPULSION);
 
     static float swirl_sign = 1.0f;
     static int is_avoiding = 0;
