@@ -1,6 +1,8 @@
 #ifndef PATHFINDING_H
 #define PATHFINDING_H
 
+// #define DEBUG_ORIENTATION 
+
 // --- Tuning Parameters ---
 #define PF_GOAL_TOLERANCE     50.0f   
 #define PF_MAX_SPEED          300.0f  
@@ -23,7 +25,7 @@
 
 #define PF_MIN_DIST 220.0f
 #define PF_SURVIVAL_DIST 130.0f
-#define PF_FORCE_MAG 1.0f
+#define PF_FORCE_MAG 1.5f
 #define PF_MAX_REPULSION 200.0f 
 
 

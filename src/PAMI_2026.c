@@ -54,7 +54,7 @@ int main()
 
     // 3. Initialize Robot Logic (HEAD)
     int sequencer = 0;
-    Fusion_Init(0.5f, 0.5f, 1.5f); // init x y theta
+    Fusion_Init(0.0f, 0.0f, 0.0f); // init x y theta
     Init_All();
 
     Path_Init();

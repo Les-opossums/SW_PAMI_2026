@@ -33,9 +33,13 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
     VelocityCommand rep = {0.0f, 0.0f, 0.0f, false};
 
     float g_norm = sqrtf(goal_vx * goal_vx + goal_vy * goal_vy);
+
+    float norm_gx = 0.0f;
+    float norm_gy = 0.0f;
+
     if (g_norm > 0.01f) {
-        goal_vx /= g_norm;
-        goal_vy /= g_norm;
+        norm_gx = goal_vx / g_norm;
+        norm_gy = goal_vy / g_norm;
     }else{
         return rep; 
     }
@@ -44,6 +48,9 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
     float obs_x = 0.0f;
     float obs_y = 0.0f;
     int threat_found = 0;
+
+    float danger_left = 0.0f;
+    float danger_right = 0.0f;
 
     float survival_radius = PF_SURVIVAL_DIST;
     float shield_x = 0.0f;
@@ -56,27 +63,52 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
 
         if (d < 25.0f) d = 25.0f; // Éviter les forces extrêmes dues à des mesures très proches
 
-        float px = scan->points[i].y;
-        float py = -scan->points[i].x;
+        float px = scan->points[i].x;
+        float py = -scan->points[i].y;
 
-        float dot = (px * goal_vx) + (py * goal_vy);
+        float dot = (px * norm_gx) + (py * norm_gy);
+        float cross_path = norm_gx * py - norm_gy * px;
+
+
+        #ifdef DEBUG_ORIENTATION
+            // Affichage pour debug orientation
+            if(d > 100.0f && d < 400.0f){
+                static int print_cpt = 0;
+                if(print_cpt++ % 10 == 0){
+                    printf("Lidar : X=%.1f, Y=%.1f | CIBLE : gx=%.2f, gy=%.2f | DOT=%.1f | CROSS=%.1f\n", px, py, norm_gx, norm_gy, dot, cross_path);
+                }
+            }
+        #endif
+
+
+        // ==================================================
+        // SCANNER SPATIAL
+        // ==================================================
+        if (d < 600.0f && dot > -10.0f){
+            float danger_weight = 1000.0f /d; // Plus proche = plus dangereux
+            if(cross_path > 0){
+                danger_left += danger_weight;
+            }
+            else{
+                danger_right += danger_weight;
+            }
+        }
+
         // ==================================================
         // A. SURVIE : est ce le point le plus proche autour du robot ?
         // ==================================================
         if (d < survival_radius){
-            if(dot < -20.0f){
-                float force = 4.0f * (survival_radius - d);
+            float force = 2.0f * (survival_radius - d);
 
-                shield_x += (-px / d) * force;
-                shield_y += (-py / d) * force;
-            }
+            shield_x += (-px / d) * force;
+            shield_y += (-py / d) * force;
         }
 
         // ==================================================
         // B. Navigation : est ce le point le plus proche dans la direction du but ?
         // ==================================================
         if (d < min_dist_front){
-            if(dot < -10.0f){
+            if(dot > -10.0f){
                 if(d < min_dist_front){
                     min_dist_front = d;
                     obs_x = px;
@@ -113,8 +145,8 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         F_brake_y = ry * force_mag;
 
         if (is_avoiding == 0){
-            float cross = goal_vx * ry - goal_vy * rx;
-            swirl_sign = (cross >= 0.0f) ? -1.0f : 1.0f;
+            if (danger_left > danger_right) swirl_sign = 1.0f;
+            else swirl_sign = -1.0f;
             is_avoiding = 1;
         }
 

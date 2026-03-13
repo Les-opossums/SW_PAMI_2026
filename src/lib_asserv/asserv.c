@@ -205,7 +205,22 @@ void pos_asserv_step(void) {
     speed_order.vx = vx_world * cos_t + vy_world * sin_t;
     speed_order.vy = -vx_world * sin_t + vy_world * cos_t;
 
-    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED); // Protection de la consigne d'asservissement pour ne pas demander l'impossible aux moteurs
+    float radar_dist = 300.0f;
+    for (int i = 0; i < LD19.previousScan->index; i++) {
+        float dist = LD19.previousScan->points[i].distance;
+        if (dist > 20.0f && dist < radar_dist) radar_dist = dist;
+    }
+
+    float speed_reduction_factor = 1.0f;
+    if (radar_dist < PF_AVOID_DIST) {
+        speed_reduction_factor = (radar_dist - 100.0f) / 250.0f; // Réduction progressive à partir de 350mm, arrêt complet à 100mm
+        if (speed_reduction_factor < 0.15f) speed_reduction_factor = 0.15f; // Ne jamais réduire à moins de 15% pour garder une certaine mobilité
+    }
+
+    speed_order.vx *= speed_reduction_factor;
+    speed_order.vy *= speed_reduction_factor;
+    
+    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED); // Protection
 
     // ========================================================
     // --- PATHFINDING : Ajout de la Répulsion ---
