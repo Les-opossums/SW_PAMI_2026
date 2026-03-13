@@ -52,7 +52,7 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
             float py = -scan->points[i].x;
 
             float dot = (px * goal_vx) + (py * goal_vy);
-            if(dot  < -10.0f){
+            if(dot  < 10.0f){
                 min_dist = d;
                 obs_x = px;
                 obs_y = py;
