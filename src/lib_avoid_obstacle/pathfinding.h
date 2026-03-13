@@ -22,8 +22,8 @@
 #define PF_SURVIVAL_DIST 110.0f
 
 
-#define PF_MIN_DIST 250.0f
-#define PF_FORCE_MAG 1.5f
+#define PF_MIN_DIST 220.0f
+#define PF_FORCE_MAG 1.0f
 
 typedef struct {
     float vx;       // Linear Velocity X (mm/s) in Robot Frame

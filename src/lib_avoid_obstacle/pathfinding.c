@@ -85,8 +85,8 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         is_avoiding = 1;
     }
     
-    float F_tan_x = -ry * swirl_sign * force_mag * 0.8f;
-    float F_tan_y = rx * swirl_sign * force_mag * 0.8f;
+    float F_tan_x = -ry * swirl_sign * force_mag * 0.3f;
+    float F_tan_y = rx * swirl_sign * force_mag *0.3f;
 
     rep.vx = F_rep_x + F_tan_x;
     rep.vy = F_rep_y + F_tan_y;
