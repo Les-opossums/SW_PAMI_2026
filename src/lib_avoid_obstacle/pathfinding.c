@@ -32,102 +32,87 @@ void Path_SetGoal(float x, float y) {
 VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float goal_vx, float goal_vy) {
     VelocityCommand rep = {0.0f, 0.0f, 0.0f, false};
 
-    float F_rep_x = 0.0f;
-    float F_rep_y = 0.0f;
+    // 1. calcul de la direction normalisé vers la cible
+    float g_norm = sqrtf(goal_vx * goal_vx + goal_vy * goal_vy);
+    if(g_norm < 0.005f) return rep; // onest arrivé pas de répulsion
 
-    // Variables pour isoler l'obstacle le plus menaçant devant (pour le vortex)
-    float min_dist_front = PF_REPULSIVE_DIST;
-    float closest_front_x = 0.0f;
-    float closest_front_y = 0.0f;
-    int obs_in_front = 0;
+    float gx = goal_vx / g_norm;
+    float gy = goal_vy / g_norm;
+
+    // vecteur latéral perpendiculaire à la direction vers la cible (pour le vortex)
+    float lat_x = -gy;
+    float lat_y = gx;
+
+    int is_blocked = 0;
+    float closest_proj = PF_AVOID_DIST;
+    float block_perp = 0.0f; // savoir si l'obstacle bloquant est à gauche ou à droite de la trajectoire pour faire un vortex dans le bon sens
+
+    float surv_x = 0.0f, surv_y = 0.0f;
 
     for (int i = 0; i < scan->index; i++) {
         float dist = scan->points[i].distance;
         
-        // Ignorer le bruit et ce qui est hors de portée
-        if (dist < 50.0f || dist > PF_REPULSIVE_DIST) continue;
+        // Ignorer qui est hors de portée ou bruit interne
+        if (dist > PF_REPULSIVE_DIST || dist < 10.0f) continue;
 
-        // Repère local : x = Avant, y = Gauche
-        float obs_x = scan->points[i].y; 
-        float obs_y = -scan->points[i].x;
-
-        // Vecteur unitaire fuyant le point
-        float rx = -obs_x / dist;
-        float ry = -obs_y / dist;
-
-        // Calcul de la force pure. 
-        float force = PF_REPULSIVE_GAIN / (dist * dist);
-        if (force > 50.0f) force = 50.0f; // Limite de stabilité par point
-
-        F_rep_x += rx * force;
-        F_rep_y += ry * force;
-
-        // Recherche du point le plus proche UNIQUEMENT devant le robot pour le vortex
-        if (obs_x > 0.0f) {
-            if (dist < min_dist_front) {
-                min_dist_front = dist;
-                closest_front_x = obs_x;
-                closest_front_y = obs_y;
-            }
-            obs_in_front++;
-        }
-    }
-
-    // =========================================================
-    // Hystérésis (Mémoire du sens d'esquive)
-    // =========================================================
-    static float locked_swirl_sign = 1.0f;
-    static int is_avoiding = 0;
-
-    // S'il n'y a aucune force de répulsion, on reset
-    if (F_rep_x == 0.0f && F_rep_y == 0.0f) {
-        is_avoiding = 0; 
-        return rep;
-    }
-
-    // =========================================================
-    // Calcul du Vortex intelligent (Basé sur le point le plus proche)
-    // =========================================================
-    float vortex_x = 0.0f;
-    float vortex_y = 0.0f;
-
-    if (obs_in_front > 0) {
-        // CORRECTION ICI : La force du vortex est proportionnelle à l'obstacle + bridée
-        float base_force = PF_REPULSIVE_GAIN / (min_dist_front * min_dist_front);
-        if (base_force > 50.0f) base_force = 50.0f; 
-        float v_force = base_force * PF_VORTEX_GAIN;
+        float obs_x = scan->points[i].y; // local x (devant)
+        float obs_y = -scan->points[i].x; // local y (gauche)
         
-        // Vecteur unitaire fuyant l'obstacle frontal le plus proche
-        float rx = -closest_front_x / min_dist_front;
-        float ry = -closest_front_y / min_dist_front;
+        // =========================================================
+        // A. Analyse du couloir
+        // =========================================================
+        float proj = obs_x * gx + obs_y * gy; // distance de l'obstacle le long du chemin
+        float perp = obs_x * lat_x + obs_y * lat_y; // decalage de 'obstacle par rapport à mon chemin
 
-        if (is_avoiding == 0) {
-            // Produit vectoriel pour choisir le côté vers la cible
-            float cross_prod = goal_vx * ry - goal_vy * rx;
-            locked_swirl_sign = (cross_prod >= 0.0f) ? -1.0f : 1.0f;
-            is_avoiding = 1;
+        if (proj > 0.0f && proj < PF_AVOID_DIST && fabsf(perp) < PF_ROBOT_RADIUS){
+            is_blocked = 1;
+            // on mémorise le point bloquant le plus proche
+            if (proj< closest_proj){
+                closest_proj = proj;
+                block_perp = perp;
+            }
         }
 
-        // Rotation à 90 degrés du vecteur de fuite
-        vortex_x = -ry * locked_swirl_sign * v_force;
-        vortex_y =  rx * locked_swirl_sign * v_force;
-    } else {
-        // Plus d'obstacle devant, on désactive le vortex
-        is_avoiding = 0;
+        // =========================================================
+        // B. bulle de survie (ne pas toucher les murs)
+        // =========================================================
+        if(dist < PF_SURVIVAL_DIST){
+            float safe_dist = (dist < 20.0f) ? 20.0f : dist;
+            float force = 800.0f * (1.0f / safe_dist - 1.0f / PF_SURVIVAL_DIST); // force très forte à courte distance, décroissante avec la distance
+            if (force > 300.0f) force = 300.0f;
+
+            surv_x += (-obs_x / safe_dist) * force;
+            surv_y += (-obs_y / safe_dist) * force;
+        }
     }
 
     // =========================================================
-    // Somme finale (SANS PLAFOND POUR LAISSER LE MUR GAGNER)
+    // C. calcul du décalage latéral
     // =========================================================
-    float total_x = F_rep_x + vortex_x;
-    float total_y = F_rep_y + vortex_y;
+    static float escape_sign = 1.0f; // pour alterner le sens d'évitement en cas de blocage
+    static int avoiding_state = 0;
+    float avoid_x = 0.0f, avoid_y = 0.0f;
 
-    // SUPPRESSION du bridage MAX_TOTAL_SPEED ici. 
-    // La répulsion a désormais le droit de valoir 1000 ou 2000 si on est collé au mur.
+    if (is_blocked){
+        if(avoiding_state == 0){
+            escape_sign = (block_perp > 0.0F) ? -1.0f : 1.0f;
+            avoiding_state = 1;
+        }
+        float force_ratio = 1.0f - (closest_proj / PF_AVOID_DIST);
+        float current_avoid_force = PF_AVOID_FORCE * (0.4f + 0.6f * force_ratio);
 
-    rep.vx = total_x;
-    rep.vy = total_y;
+        avoid_x = lat_x * escape_sign * current_avoid_force;
+        avoid_y = lat_y * escape_sign * current_avoid_force;
 
+        float brake_force = PF_MAX_SPEED * force_ratio;
+        avoid_x += -gx * brake_force;
+        avoid_y += -gy * brake_force;
+    } else {
+        avoiding_state = 0;
+    }
+
+    rep.vx = avoid_x + surv_x;
+    rep.vy = avoid_y + surv_y;
     return rep;
 }
 

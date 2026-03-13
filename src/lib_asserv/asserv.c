@@ -24,6 +24,14 @@ float a_max = DEFAULT_CONSTRAINT_A_MAX;
 int emergency_break_requested = 0;
 
 /******************************    Fonctions    *******************************/
+static void limit_magnitude(float* x, float* y, float max_val) {
+    float mag_sq = (*x * *x) + (*y * *y);
+    if (mag_sq > (max_val * max_val)) {
+        float mag = sqrtf(mag_sq);
+        *x = (*x / mag) * max_val;
+        *y = (*y / mag) * max_val;
+    }
+}
 
 // init de tout l'asservissement
 void asserv_init(void) {
@@ -197,6 +205,8 @@ void pos_asserv_step(void) {
     speed_order.vx = vx_world * cos_t + vy_world * sin_t;
     speed_order.vy = -vx_world * sin_t + vy_world * cos_t;
 
+    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED); // Protection de la consigne d'asservissement pour ne pas demander l'impossible aux moteurs
+
     // ========================================================
     // --- PATHFINDING : Ajout de la Répulsion ---
     // ========================================================
@@ -206,6 +216,8 @@ void pos_asserv_step(void) {
     // On dévie la vitesse idéale avec la force de répulsion
     speed_order.vx += repulsion.vx;
     speed_order.vy += repulsion.vy;
+
+    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED); // Protection
     // ========================================================
 
     // --- Calcul de la vitesse angulaire

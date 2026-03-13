@@ -8,11 +8,18 @@
 
 #define PF_ATTRACTIVE_GAIN    1.5f    
 
-// --- PARAMÈTRES HYBRIDES ---
-#define PF_REPULSIVE_DIST     200.0f      // On anticipe jusqu'à 40 cm
-#define PF_REPULSIVE_GAIN     2000000.0f  // 2 millions (car on divise par d^2)
-#define PF_VORTEX_GAIN        1.0f        // Gain normalisé, 1.0 suffit pour glisser
+// --- PARAMÈTRES HYBRIDES --- 
+#define PF_REPULSIVE_DIST     250.0f      // On anticipe jusqu'à 40 cm
+#define PF_REPULSIVE_GAIN     1500.0f  // 2 millions (car on divise par d^2)
+#define PF_VORTEX_GAIN        1.2f        // Gain normalisé, 1.0 suffit pour glisser
 
+#define PF_MAX_REPULSION 450.0f 
+
+
+#define PF_ROBOT_RADIUS 150.0f
+#define PF_AVOID_DIST 300.0f
+#define PF_AVOID_FORCE 250.0f
+#define PF_SURVIVAL_DIST 110.0f
 
 typedef struct {
     float vx;       // Linear Velocity X (mm/s) in Robot Frame
