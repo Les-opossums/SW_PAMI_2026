@@ -40,78 +40,89 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         return rep; 
     }
 
-    float min_dist = PF_MIN_DIST;
+    float min_dist_front = PF_MIN_DIST;
     float obs_x = 0.0f;
     float obs_y = 0.0f;
     int threat_found = 0;
 
-    // bouclier global
-    float F_rep_total_x = 0.0f;
-    float F_rep_total_y = 0.0f;
+    float survival_radius = PF_SURVIVAL_DIST;
+    float shield_x = 0.0f;
+    float shield_y = 0.0f;
 
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
-        if(d > 20.0f && d < min_dist){
-            float px = scan->points[i].y;
-            float py = -scan->points[i].x;
+
+        if(d < 20.0f ) continue; // Ignorer les points très proches (bruit)
+
+        float px = scan->points[i].y;
+        float py = -scan->points[i].x;
 
 
-            // ==================================================
-            // A. BOUCLIER GLOBAL (on fuit tous les points proches)
-            // ==================================================
-            float rep_force = (PF_FORCE_MAG * (PF_MIN_DIST - d)) * 0.1;
+        // ==================================================
+        // A. SURVIE : est ce le point le plus proche autour du robot ?
+        // ==================================================
+        if (d < survival_radius){
+            float force = 2.0f * (survival_radius - d);
 
-            F_rep_total_x += (-px / d) * rep_force;
-            F_rep_total_y += (-py / d) * rep_force;
+            shield_x += (-px / d) * force;
+            shield_y += (-py / d) * force;
+        }
 
-            // ==================================================
-            // B. FILTRE VORTEX
-            // ==================================================
-
+        // ==================================================
+        // B. Navigation : est ce le point le plus proche dans la direction du but ?
+        // ==================================================
+        if (d < min_dist_front){
             float dot = (px * goal_vx) + (py * goal_vy);
-            if(dot  < 10.0f){
-                if(d < min_dist){
-                    min_dist = d;
+            if(dot < -10.0f){
+                if(d < min_dist_front){
+                    min_dist_front = d;
                     obs_x = px;
                     obs_y = py;
                     threat_found = 1;
-                }
-                
+                }   
             }
-
         }
     }
 
-    limit_magnitude(&F_rep_total_x, &F_rep_total_y, PF_MAX_REPULSION);
+    limit_magnitude(&shield_x, &shield_y, PF_MAX_REPULSION);
+
+    // ==================================================
+    // FORCE DE CONTOURNEMENT
+    // ==================================================
 
     static float swirl_sign = 1.0f;
     static int is_avoiding = 0;
 
-    if(!threat_found){
-        is_avoiding =0;
-        return rep;
+    float F_brake_x = 0.0f;
+    float F_brake_y = 0.0f;
+
+    float F_tan_x = 0.0f;
+    float F_tan_y = 0.0f;
+
+    if(threat_found){
+        float force_mag = PF_FORCE_MAG * (PF_AVOID_DIST - min_dist_front);
+        if (force_mag > PF_MAX_REPULSION) force_mag = PF_MAX_REPULSION;
+        
+        float rx = -obs_x / min_dist_front;
+        float ry = -obs_y / min_dist_front;
+
+        F_brake_x = rx * force_mag;
+        F_brake_y = ry * force_mag;
+
+        if (is_avoiding == 0){
+            float cross = goal_vx * ry - goal_vy * rx;
+            swirl_sign = (cross >= 0.0f) ? -1.0f : 1.0f;
+            is_avoiding = 1;
+        }
+
+        F_tan_x = -ry * swirl_sign * force_mag * 0.2f;
+        F_tan_y =  rx * swirl_sign * force_mag * 0.2f;
+    }else{
+        is_avoiding = 0;
     }
 
-    float force_mag= PF_FORCE_MAG * (PF_MIN_DIST - min_dist);
-    if (force_mag > 500.0f) force_mag = 500.0f;
-
-    float rx = -obs_x /min_dist;
-    float ry = -obs_y /min_dist;
-
-    float F_rep_x = rx * force_mag;
-    float F_rep_y = ry * force_mag;
-
-    if (is_avoiding == 0){
-        float cross = goal_vx * ry - goal_vy * rx;
-        swirl_sign = (cross >= 0.0f) ? -1.0f : 1.0f;
-        is_avoiding = 1;
-    }
-    
-    float F_tan_x = -ry * swirl_sign * force_mag * 0.2f;
-    float F_tan_y = rx * swirl_sign * force_mag *0.2f;
-
-    rep.vx = F_rep_x + F_tan_x;
-    rep.vy = F_rep_y + F_tan_y;
+    rep.vx = F_brake_x + F_tan_x + shield_x;
+    rep.vy = F_brake_y + F_tan_y + shield_y;
 
     return rep;
 

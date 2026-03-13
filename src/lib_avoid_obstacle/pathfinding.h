@@ -18,12 +18,13 @@
 #define PF_ROBOT_RADIUS 150.0f
 #define PF_AVOID_DIST 300.0f
 #define PF_AVOID_FORCE 250.0f
-#define PF_SURVIVAL_DIST 110.0f
+
 
 
 #define PF_MIN_DIST 220.0f
+#define PF_SURVIVAL_DIST 110.0f
 #define PF_FORCE_MAG 1.0f
-#define PF_MAX_REPULSION 400.0f 
+#define PF_MAX_REPULSION 200.0f 
 
 
 typedef struct {
