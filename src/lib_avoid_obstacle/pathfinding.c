@@ -32,88 +32,52 @@ void Path_SetGoal(float x, float y) {
 VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float goal_vx, float goal_vy) {
     VelocityCommand rep = {0.0f, 0.0f, 0.0f, false};
 
-    // 1. calcul de la direction normalisé vers la cible
-    float g_norm = sqrtf(goal_vx * goal_vx + goal_vy * goal_vy);
-    if(g_norm < 0.005f) return rep; // onest arrivé pas de répulsion
-
-    float gx = goal_vx / g_norm;
-    float gy = goal_vy / g_norm;
-
-    // vecteur latéral perpendiculaire à la direction vers la cible (pour le vortex)
-    float lat_x = -gy;
-    float lat_y = gx;
-
-    int is_blocked = 0;
-    float closest_proj = PF_AVOID_DIST;
-    float block_perp = 0.0f; // savoir si l'obstacle bloquant est à gauche ou à droite de la trajectoire pour faire un vortex dans le bon sens
-
-    float surv_x = 0.0f, surv_y = 0.0f;
+    float min_dist = PF_MIN_DIST;
+    float obs_x = 0.0f;
+    float obs_y = 0.0f;
+    int threat_found = 0;
 
     for (int i = 0; i < scan->index; i++) {
-        float dist = scan->points[i].distance;
-        
-        // Ignorer qui est hors de portée ou bruit interne
-        if (dist > PF_REPULSIVE_DIST || dist < 10.0f) continue;
-
-        float obs_x = scan->points[i].y; // local x (devant)
-        float obs_y = -scan->points[i].x; // local y (gauche)
-        
-        // =========================================================
-        // A. Analyse du couloir
-        // =========================================================
-        float proj = obs_x * gx + obs_y * gy; // distance de l'obstacle le long du chemin
-        float perp = obs_x * lat_x + obs_y * lat_y; // decalage de 'obstacle par rapport à mon chemin
-
-        if (proj > 0.0f && proj < PF_AVOID_DIST && fabsf(perp) < PF_ROBOT_RADIUS){
-            is_blocked = 1;
-            // on mémorise le point bloquant le plus proche
-            if (proj< closest_proj){
-                closest_proj = proj;
-                block_perp = perp;
-            }
-        }
-
-        // =========================================================
-        // B. bulle de survie (ne pas toucher les murs)
-        // =========================================================
-        if(dist < PF_SURVIVAL_DIST){
-            float safe_dist = (dist < 20.0f) ? 20.0f : dist;
-            float force = 800.0f * (1.0f / safe_dist - 1.0f / PF_SURVIVAL_DIST); // force très forte à courte distance, décroissante avec la distance
-            if (force > 300.0f) force = 300.0f;
-
-            surv_x += (-obs_x / safe_dist) * force;
-            surv_y += (-obs_y / safe_dist) * force;
+        float d = scan->points[i].distance;
+        if(d > 20.0f && d < min_dist){
+            min_dist = d;
+            obs_x = scan->points[i].y;
+            obs_y = -scan->points[i].x;
+            threat_found = 1;
         }
     }
 
-    // =========================================================
-    // C. calcul du décalage latéral
-    // =========================================================
-    static float escape_sign = 1.0f; // pour alterner le sens d'évitement en cas de blocage
-    static int avoiding_state = 0;
-    float avoid_x = 0.0f, avoid_y = 0.0f;
+    static float swirl_sign = 1.0f;
+    static int is_avoiding = 0;
 
-    if (is_blocked){
-        if(avoiding_state == 0){
-            escape_sign = (block_perp > 0.0F) ? -1.0f : 1.0f;
-            avoiding_state = 1;
-        }
-        float force_ratio = 1.0f - (closest_proj / PF_AVOID_DIST);
-        float current_avoid_force = PF_AVOID_FORCE * (0.4f + 0.6f * force_ratio);
-
-        avoid_x = lat_x * escape_sign * current_avoid_force;
-        avoid_y = lat_y * escape_sign * current_avoid_force;
-
-        float brake_force = PF_MAX_SPEED * force_ratio;
-        avoid_x += -gx * brake_force;
-        avoid_y += -gy * brake_force;
-    } else {
-        avoiding_state = 0;
+    if(!threat_found){
+        is_avoiding =0;
+        return rep;
     }
 
-    rep.vx = avoid_x + surv_x;
-    rep.vy = avoid_y + surv_y;
+    float force_mag= 1.0f * (300.0f - min_dist);
+    if (force_mag > 500.0f) force_mag = 500.0f;
+
+    float rx = -obs_x /min_dist;
+    float ry = -obs_y /min_dist;
+
+    float F_rep_x = rx * force_mag;
+    float F_rep_y = ry * force_mag;
+
+    if (is_avoiding == 0){
+        float cross = goal_vx * ry - goal_vy * rx;
+        swirl_sign = (cross >= 0.0f) ? -1.0f : 1.0f;
+        is_avoiding = 1;
+    }
+    
+    float F_tan_x = -ry * swirl_sign * force_mag * 0.8f;
+    float F_tan_y = rx * swirl_sign * force_mag * 0.8f;
+
+    rep.vx = F_rep_x + F_tan_x;
+    rep.vy = F_rep_y + F_tan_y;
+
     return rep;
+
 }
 
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan) {
