@@ -152,10 +152,21 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
     float F_att_x = dx_local * PF_ATTRACTIVE_GAIN;
     float F_att_y = dy_local * PF_ATTRACTIVE_GAIN;
 
+    float absolute_min_dist = 300.0f; //au dela de 30 cm, on n'est plus en danger immédiat
+    for (int i = 0; i < scan->index; i++) {
+        float d = scan->points[i].distance;
+        if (d > 20.0f && d < absolute_min_dist) absolute_min_dist = d;
+    }
+
+    float dynamic_max_speed = PF_MAX_SPEED;
+    if (absolute_min_dist < PF_AVOID_DIST) {
+        dynamic_max_speed = PF_MAX_SPEED * (absolute_min_dist / PF_AVOID_DIST);
+        if (dynamic_max_speed < 50.0f) dynamic_max_speed = 50.0f; // Vitesse minimale pour ne pas staller
+    }
     // CORRECTION MAJEURE : On bride l'attraction ! 
     // L'envie d'aller vers la cible ne doit jamais dépasser la vitesse max.
     // Ainsi, une répulsion forte d'un mur proche pourra la surpasser.
-    limit_magnitude(&F_att_x, &F_att_y, PF_MAX_SPEED);
+    limit_magnitude(&F_att_x, &F_att_y, dynamic_max_speed);
 
     // --- 2. Force Répulsive & Vortex (Contre les obstacles) ---
     VelocityCommand rep = Path_GetRepulsionVector(scan, dx_local, dy_local);
