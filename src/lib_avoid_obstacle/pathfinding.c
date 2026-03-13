@@ -52,7 +52,7 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
             float py = -scan->points[i].x;
 
             float dot = (px * goal_vx) + (py * goal_vy);
-            if(dot  < -20.0f){
+            if(dot  < -10.0f){
                 min_dist = d;
                 obs_x = px;
                 obs_y = py;
@@ -85,8 +85,8 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         is_avoiding = 1;
     }
     
-    float F_tan_x = -ry * swirl_sign * force_mag * 0.3f;
-    float F_tan_y = rx * swirl_sign * force_mag *0.3f;
+    float F_tan_x = -ry * swirl_sign * force_mag * 0.2f;
+    float F_tan_y = rx * swirl_sign * force_mag *0.2f;
 
     rep.vx = F_rep_x + F_tan_x;
     rep.vy = F_rep_y + F_tan_y;
