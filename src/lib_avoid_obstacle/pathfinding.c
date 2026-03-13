@@ -44,7 +44,7 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         return rep; 
     }
 
-    float min_dist_front = PF_MIN_DIST;
+    float min_dist_front = PF_AVOID_DIST;
     float obs_x = 0.0f;
     float obs_y = 0.0f;
     int threat_found = 0;
@@ -108,13 +108,11 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         // B. Navigation : est ce le point le plus proche dans la direction du but ?
         // ==================================================
         if (d < min_dist_front){
-            if(dot > -10.0f){
-                if(d < min_dist_front){
-                    min_dist_front = d;
-                    obs_x = px;
-                    obs_y = py;
-                    threat_found = 1;
-                }   
+            if(dot > 0.0f){
+                min_dist_front = d;
+                obs_x = px;
+                obs_y = py;
+                threat_found = 1;  
             }
         }
     }
@@ -138,6 +136,12 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
         float force_mag = PF_FORCE_MAG * (PF_AVOID_DIST - min_dist_front);
         if (force_mag > PF_MAX_REPULSION) force_mag = PF_MAX_REPULSION;
         
+        float obs_cross_path = norm_gx * obs_y - norm_gy * obs_x;
+        float lateral_factor = 1.0f - (fabsf(obs_cross_path) / 220.0f);
+        if (lateral_factor < 0.0f) lateral_factor = 0.0f;
+        
+        force_mag *= lateral_factor;
+
         float rx = -obs_x / min_dist_front;
         float ry = -obs_y / min_dist_front;
 
@@ -150,8 +154,13 @@ VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float 
             is_avoiding = 1;
         }
 
-        F_tan_x = -ry * swirl_sign * force_mag * 0.2f;
-        F_tan_y =  rx * swirl_sign * force_mag * 0.2f;
+        float tx = -ry * swirl_sign;
+        float ty =  rx * swirl_sign;
+
+        float centripetal_factor = 0.3f;
+
+        F_tan_x = (tx - rx * centripetal_factor) * force_mag * 0.5f;
+        F_tan_y = (ty - ry * centripetal_factor) * force_mag * 0.5f;
     }else{
         is_avoiding = 0;
     }

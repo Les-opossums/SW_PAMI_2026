@@ -10,22 +10,12 @@
 
 #define PF_ATTRACTIVE_GAIN    1.5f    
 
-// --- PARAMÈTRES HYBRIDES --- 
-#define PF_REPULSIVE_DIST     250.0f      // On anticipe jusqu'à 40 cm
-#define PF_REPULSIVE_GAIN     1500.0f  // 2 millions (car on divise par d^2)
-#define PF_VORTEX_GAIN        1.2f        // Gain normalisé, 1.0 suffit pour glisser
-
-
-
-#define PF_ROBOT_RADIUS 150.0f
-#define PF_AVOID_DIST 300.0f
-#define PF_AVOID_FORCE 250.0f
-
+#define PF_AVOID_DIST 200.0f
 
 
 #define PF_MIN_DIST 220.0f
-#define PF_SURVIVAL_DIST 130.0f
-#define PF_FORCE_MAG 1.5f
+#define PF_SURVIVAL_DIST 80.0f
+#define PF_FORCE_MAG 6.0f
 #define PF_MAX_REPULSION 200.0f 
 
 
