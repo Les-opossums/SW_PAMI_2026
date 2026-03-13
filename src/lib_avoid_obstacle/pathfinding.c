@@ -30,107 +30,79 @@ void Path_SetGoal(float x, float y) {
 
 
 VelocityCommand Path_GetRepulsionVector(const LD19DataPointHandler* scan, float goal_vx, float goal_vy) {
-    VelocityCommand rep = {0.0f, 0.0f, 0.0f, false};
+    VelocityCommand rep = {goal_vx, goal_vy, 0.0f, false}; // Par défaut : on retourne le vecteur intact
 
     float g_norm = sqrtf(goal_vx * goal_vx + goal_vy * goal_vy);
-    if (g_norm < 0.01f) return rep; 
-    
+    if (g_norm < 0.01f) return rep;
+
     float norm_gx = goal_vx / g_norm;
     float norm_gy = goal_vy / g_norm;
 
-    // ==================================================
-    // paramétrage couloir
-    // ==================================================
-    float robot_radius = 50.0f;
-    float margin = 30.0f;
-    float stop_distance = robot_radius + margin;
-    float anticipation_dist = 250.0f; 
-    float corridor_width = robot_radius + margin;
+    float avoid_radius = 80.0f;
+    float field_radius = 220.0f;
 
-    float max_brake_factor = 0.0f;
-    float max_lat_force = 0.0f;
-
-    static float swirl_sign = 1.0f;
-    static int is_avoiding = 0;
-
-    int threat_found = 0;
-    float threat_cross_sum = 0.0f;
-
-    float shield_x = 0.0f;
-    float shield_y = 0.0f;
+    float min_d = field_radius;
+    float obs_x = 0.0f, obs_y = 0.0f;
+    int   threat_found = 0;
+    float cross_sum = 0.0f;
 
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
+        if (d < 10.0f) continue;
+        if (d < 25.0f) d = 25.0f;
 
-        if(d < 10.0f ) continue; // Ignorer les points très proches (bruit)
-        if (d < 25.0f) d = 25.0f; // Éviter les forces extrêmes dues à des mesures très proches
-
-        float px = scan->points[i].x;
+        float px =  scan->points[i].x;
         float py = -scan->points[i].y;
+        float dot = px * norm_gx + py * norm_gy;
 
-        // 1. champ de survie (sécurité physique absolue autour du robot)
-        if (d < robot_radius + margin){
-            float force = 2.0f * ((robot_radius + margin) - d);
-            shield_x += (-px / d) * force;
-            shield_y += (-py / d) * force;
-        }
-
-        // 2. projection dans le couloir de navigation
-        float dot = (px * norm_gx) + (py * norm_gy);
-        float cross = norm_gx * py - norm_gy * px;
-
-        // 3. analyse du danger
-        if (dot > 0.0f && dot < anticipation_dist){
-            if (fabsf(cross) < corridor_width){
+        if (dot > -20.0f && d < field_radius) {
+            if (d < min_d) {
+                min_d = d; obs_x = px; obs_y = py;
                 threat_found = 1;
-                threat_cross_sum += cross;
-
-                
-                float braking_factor = 0.0f;
-                if (dot < stop_distance) braking_factor = 1.0f;
-                else braking_factor = (anticipation_dist - dot) / (anticipation_dist - stop_distance);
-                if(braking_factor > max_brake_factor) max_brake_factor = braking_factor;
-
-                float lat = 0.0f;
-                if(dot <= stop_distance) lat = 50.0f;
-                else lat = 50.0f * (anticipation_dist - dot) / (anticipation_dist - stop_distance);
-                if (lat > max_lat_force) max_lat_force = lat;
             }
+            cross_sum += norm_gx * py - norm_gy * px;
         }
     }
 
-    limit_magnitude(&shield_x, &shield_y, 50.0f);
+    static float swirl_sign = 1.0f;
+    static int   is_avoiding = 0;
+    static int   free_cycles = 0;
+    static const int EXIT_DELAY = 15;
 
-    // ==================================================
-    // application des forces fluides
-    // ==================================================
-    if (threat_found){
-        if (is_avoiding == 0){
-            if (threat_cross_sum > 0) swirl_sign = 1.0f;
-            else swirl_sign = -1.0f;
+    if (threat_found) {
+        free_cycles = 0;
+        if (!is_avoiding) {
+            swirl_sign  = (cross_sum > 0.0f) ? 1.0f : -1.0f;
             is_avoiding = 1;
         }
 
-        // 1. freinage
-        float F_brake_x = -norm_gx * max_brake_factor;
-        float F_brake_y = -norm_gy * max_brake_factor;
+        // t_factor : 0 à la lisière du champ, 1 au contact de l'obstacle
+        float t_factor = (field_radius - min_d) / (field_radius - avoid_radius);
+        if (t_factor < 0.0f) t_factor = 0.0f;
+        if (t_factor > 1.0f) t_factor = 1.0f;
 
-        // 2. poussée latérale
-        float lat_dir_x = -norm_gy * swirl_sign; // Perpendiculaire à la direction du but
-        float lat_dir_y = norm_gx * swirl_sign;
+        // Déviation max = 90° quand collé à l'obstacle, 0° à field_radius
+        // On peut monter à (M_PI * 0.6f) si 90° ne suffit pas à contourner
+        float deflection = swirl_sign * (M_PI_2)* 0.65 * t_factor;
 
-        float F_lat_x = lat_dir_x * max_lat_force;
-        float F_lat_y = lat_dir_y * max_lat_force;
+        float cos_d = cosf(deflection);
+        float sin_d = sinf(deflection);
 
-        rep.vx = F_brake_x + F_lat_x + shield_x;
-        rep.vy = F_brake_y + F_lat_y + shield_y;
-    }else{
-        is_avoiding = 0;
-        rep.vx = shield_x;
-        rep.vy = shield_y;
+        // Rotation du vecteur objectif — la norme est CONSERVÉE
+        rep.vx = goal_vx * cos_d - goal_vy * sin_d;
+        rep.vy = goal_vx * sin_d + goal_vy * cos_d;
+
+    } else {
+        free_cycles++;
+        if (free_cycles >= EXIT_DELAY) {
+            is_avoiding = 0;
+        }
+        // rep = {goal_vx, goal_vy} — déjà initialisé en haut
     }
+
     return rep;
 }
+
 
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan) {
     VelocityCommand cmd = {0.0f, 0.0f, 0.0f, false};

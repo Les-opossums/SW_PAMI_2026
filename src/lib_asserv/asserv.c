@@ -171,6 +171,8 @@ void speed_asserv_break_step(void) {
 }
 
 float old_angle = 0;
+float field_radius = 220.0f;
+float avoid_radius = 80.0f;
 
 void pos_asserv_step(void) {
     // --- Consignes
@@ -205,18 +207,29 @@ void pos_asserv_step(void) {
     speed_order.vx = vx_world * cos_t + vy_world * sin_t;
     speed_order.vy = -vx_world * sin_t + vy_world * cos_t;
 
-    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED); // Protection
-    // ========================================================
-    // --- PATHFINDING : Ajout de la Répulsion ---
-    // ========================================================
-    // Note : LD19.previousScan est déjà un pointeur, pas besoin de '&'
-    VelocityCommand repulsion = Path_GetRepulsionVector(LD19.previousScan, speed_order.vx, speed_order.vy);
-    
-    // On dévie la vitesse idéale avec la force de répulsion
-    speed_order.vx += repulsion.vx;
-    speed_order.vy += repulsion.vy;
+    float absolute_min_dist = field_radius;
+    for (int i = 0; i < LD19.previousScan->index; i++) {
+        float d = LD19.previousScan->points[i].distance;
+        if (d > 20.0f && d < absolute_min_dist) absolute_min_dist = d;
+    }
 
-    limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED); // Protection
+    if (absolute_min_dist < field_radius) {
+        // Vitesse proportionnelle à la distance : 100% à field_radius, ~20% à avoid_radius
+        float speed_factor = (absolute_min_dist - avoid_radius) / (field_radius - avoid_radius);
+        if (speed_factor < 0.2f) speed_factor = 0.2f;
+        if (speed_factor > 1.0f) speed_factor = 1.0f;
+        limit_magnitude(&speed_order.vx, &speed_order.vy,
+                        PF_MAX_SPEED * speed_factor);
+    } else {
+        limit_magnitude(&speed_order.vx, &speed_order.vy, PF_MAX_SPEED);
+    }
+
+    // --- Déviation directionnelle ---
+    VelocityCommand deflected = Path_GetRepulsionVector(LD19.previousScan,
+                                                        speed_order.vx,
+                                                        speed_order.vy);
+    speed_order.vx = deflected.vx;
+    speed_order.vy = deflected.vy;
     // ========================================================
 
     // --- Calcul de la vitesse angulaire
