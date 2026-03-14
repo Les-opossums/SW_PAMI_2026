@@ -37,17 +37,28 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
     // =========================================================
     // PARAMÈTRES
     // =========================================================
-    const float D_MAX = 160.0f; 
     const float D_MIN = 60.0f; 
+
+    // 1. Paramètres du Cône Avant (Tactique)
+    const float D_MAX = 160.0f; 
     const float FORCE_MAX = 300.0f; 
     const float LATERAL_GAIN = 1.0f; 
 
-    // Variables pour chercher LE point le plus proche
-    float min_dist = D_MAX;
-    float threat_angle = 0.0f;
-    bool obstacle_found = false;
+    // 2. Paramètres du Bouclier Angles Morts (Survie)
+    const float SHIELD_MAX = 100.0f;  // S'active seulement très près !
+    const float FORCE_SHIELD = 400.0f; // Force de poussée latérale/arrière
 
-    // 1. RECHERCHE DE LA PLUS GRANDE MENACE DANS LE CÔNE AVANT
+    // Variables pour l'avant
+    float min_front_dist = D_MAX;
+    float front_angle = 0.0f;
+    bool front_found = false;
+
+    // Variables pour les côtés et l'arrière
+    float min_blind_dist = SHIELD_MAX;
+    float blind_angle = 0.0f;
+    bool blind_found = false;
+
+    // 1. RECHERCHE DES MENACES
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
         float angle_deg = scan->points[i].angle;
@@ -55,16 +66,20 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
         // On normalise l'angle entre -180° et +180°
         if (angle_deg > 180.0f) angle_deg -= 360.0f;
 
-        // --- LES ŒILLÈRES (Cône de vision) ---
-        // On ignore totalement les objets qui sont sur les côtés arrière ou derrière (ex: au-delà de 75°)
-        // Ça lui permet de glisser entre deux objets sans être retenu en arrière quand il les passe !
+        // --- SÉPARATION DES ZONES ---
         if (angle_deg > -35.0f && angle_deg < 35.0f) {
-            
-            // On ne garde que LE point le plus dangereux
-            if (d > 0.0f && d < min_dist) {
-                min_dist = d;
-                threat_angle = scan->points[i].angle * (M_PI / 180.0f);
-                obstacle_found = true;
+            // Zone Tactique : Cône avant
+            if (d > 0.0f && d < min_front_dist) {
+                min_front_dist = d;
+                front_angle = scan->points[i].angle * (M_PI / 180.0f);
+                front_found = true;
+            }
+        } else {
+            // Zone de Survie : Angles morts (Tout le reste)
+            if (d > 0.0f && d < min_blind_dist) {
+                min_blind_dist = d;
+                blind_angle = scan->points[i].angle * (M_PI / 180.0f);
+                blind_found = true;
             }
         }
     }
@@ -72,25 +87,42 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
     float sum_vx = 0.0f;
     float sum_vy = 0.0f;
 
-    // 2. CALCUL DE LA FORCE SUR CE SEUL POINT
-    if (obstacle_found) {
-        float penetration = (D_MAX - min_dist) / (D_MAX - D_MIN);
+    // 2. CALCUL DE LA FORCE AVANT (Répulsion + Glissade)
+    if (front_found) {
+        float penetration = (D_MAX - min_front_dist) / (D_MAX - D_MIN);
         if (penetration < 0.0f) penetration = 0.0f;
         if (penetration > 1.2f) penetration = 1.2f; 
 
         float force_mag = FORCE_MAX * penetration;
 
-        float r_x = -cosf(threat_angle);
-        float r_y = -sinf(threat_angle);
-        float t_x = -sinf(threat_angle);
-        float t_y = cosf(threat_angle);
+        float r_x = -cosf(front_angle);
+        float r_y = -sinf(front_angle);
+        float t_x = -sinf(front_angle);
+        float t_y = cosf(front_angle);
 
-        sum_vx = force_mag * (r_x + LATERAL_GAIN * t_x);
-        sum_vy = force_mag * (r_y + LATERAL_GAIN * t_y);
+        sum_vx += force_mag * (r_x + LATERAL_GAIN * t_x);
+        sum_vy += force_mag * (r_y + LATERAL_GAIN * t_y);
+    }
+
+    // 3. CALCUL DU BOUCLIER 360° (Répulsion pure uniquement)
+    if (blind_found) {
+        float penetration = (SHIELD_MAX - min_blind_dist) / (SHIELD_MAX - D_MIN);
+        if (penetration < 0.0f) penetration = 0.0f;
+        if (penetration > 1.2f) penetration = 1.2f; 
+
+        float force_mag = FORCE_SHIELD * penetration;
+
+        // Pas de glissade latérale ici, on veut juste repousser le mur !
+        float r_x = -cosf(blind_angle);
+        float r_y = -sinf(blind_angle);
+
+        sum_vx += force_mag * r_x;
+        sum_vy += force_mag * r_y;
     }
 
     // On limite par sécurité
-    limit_magnitude(&sum_vx, &sum_vy, FORCE_MAX);
+    // On autorise un peu plus de vitesse globale si les deux forces s'additionnent
+    limit_magnitude(&sum_vx, &sum_vy, FORCE_MAX * 1.2f);
 
     // =========================================================
     // LE FILTRE (Lissage pour éviter qu'il tremble)
@@ -98,7 +130,6 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
     static float filtered_vx = 0.0f;
     static float filtered_vy = 0.0f;
     
-    // Le filtre va lisser le passage d'un mur à l'autre
     const float ALPHA = 0.3f; 
 
     filtered_vx = ALPHA * sum_vx + (1.0f - ALPHA) * filtered_vx;
