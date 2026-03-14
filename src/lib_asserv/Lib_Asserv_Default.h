@@ -14,7 +14,7 @@
 /*############################################################################*/
 /*                                  Motion                                    */
 /*############################################################################*/
-#define DEFAULT_CONSTRAINT_V_MAX 0.5
+#define DEFAULT_CONSTRAINT_V_MAX 0.2
 #define DEFAULT_CONSTRAINT_VT_MAX 1.0
 
 #define DEFAULT_CONSTRAINT_A_MAX 0.3

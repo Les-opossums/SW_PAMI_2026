@@ -28,59 +28,82 @@ static void limit_magnitude(float* x, float* y, float max_val) {
     }
 }
 
-// --- NOUVELLE FONCTION APF PURE ET SANS MÉMOIRE ---
 void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, float *rep_vy) {
     *rep_vx = 0.0f;
     *rep_vy = 0.0f;
 
     if (scan == NULL || scan->index == 0) return;
 
-    float sum_vx = 0.0f;
-    float sum_vy = 0.0f;
+    // =========================================================
+    // PARAMÈTRES
+    // =========================================================
+    const float D_MAX = 160.0f; 
+    const float D_MIN = 60.0f; 
+    const float FORCE_MAX = 300.0f; 
+    const float LATERAL_GAIN = 1.0f; 
 
-    // Paramètres à régler (tu peux les mettre en #define si tu préfères)
-    const float INFLUENCE_RADIUS = 300.0f; // mm
-    const float ROBOT_RADIUS     = 100.0f;  // mm
-    const float REPULSION_GAIN   = 250000.0f; 
-    const float MAX_REP_SPEED    = 300.0f; // mm/s
+    // Variables pour chercher LE point le plus proche
+    float min_dist = D_MAX;
+    float threat_angle = 0.0f;
+    bool obstacle_found = false;
 
+    // 1. RECHERCHE DE LA PLUS GRANDE MENACE DANS LE CÔNE AVANT
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
+        float angle_deg = scan->points[i].angle;
 
-        if (d > 0.0f && d <= INFLUENCE_RADIUS) {
-            if (d < ROBOT_RADIUS) d = ROBOT_RADIUS; // Sécurité mathématique
+        // On normalise l'angle entre -180° et +180°
+        if (angle_deg > 180.0f) angle_deg -= 360.0f;
 
-            float force_magnitude = REPULSION_GAIN * ((1.0f / d) - (1.0f / INFLUENCE_RADIUS)) / (d * d);
+        // --- LES ŒILLÈRES (Cône de vision) ---
+        // On ignore totalement les objets qui sont sur les côtés arrière ou derrière (ex: au-delà de 75°)
+        // Ça lui permet de glisser entre deux objets sans être retenu en arrière quand il les passe !
+        if (angle_deg > -35.0f && angle_deg < 35.0f) {
             
-            float angle_rad = scan->points[i].angle * (M_PI / 180.0f);
-
-            // Répulsion (on s'éloigne de l'obstacle)
-            sum_vx -= force_magnitude * cosf(angle_rad);
-            sum_vy -= force_magnitude * sinf(angle_rad);
+            // On ne garde que LE point le plus dangereux
+            if (d > 0.0f && d < min_dist) {
+                min_dist = d;
+                threat_angle = scan->points[i].angle * (M_PI / 180.0f);
+                obstacle_found = true;
+            }
         }
     }
 
-    limit_magnitude(&sum_vx, &sum_vy, MAX_REP_SPEED);
+    float sum_vx = 0.0f;
+    float sum_vy = 0.0f;
 
+    // 2. CALCUL DE LA FORCE SUR CE SEUL POINT
+    if (obstacle_found) {
+        float penetration = (D_MAX - min_dist) / (D_MAX - D_MIN);
+        if (penetration < 0.0f) penetration = 0.0f;
+        if (penetration > 1.2f) penetration = 1.2f; 
+
+        float force_mag = FORCE_MAX * penetration;
+
+        float r_x = -cosf(threat_angle);
+        float r_y = -sinf(threat_angle);
+        float t_x = -sinf(threat_angle);
+        float t_y = cosf(threat_angle);
+
+        sum_vx = force_mag * (r_x + LATERAL_GAIN * t_x);
+        sum_vy = force_mag * (r_y + LATERAL_GAIN * t_y);
+    }
+
+    // On limite par sécurité
+    limit_magnitude(&sum_vx, &sum_vy, FORCE_MAX);
+
+    // =========================================================
+    // LE FILTRE (Lissage pour éviter qu'il tremble)
+    // =========================================================
     static float filtered_vx = 0.0f;
     static float filtered_vy = 0.0f;
     
-    // Le coefficient ALPHA (entre 0.0 et 1.0)
-    // 1.0 = Aucune filtration (réaction instantanée, très nerveux)
-    // 0.1 = Très filtré (réaction lente et très douce)
-    const float ALPHA = 0.15f; 
+    // Le filtre va lisser le passage d'un mur à l'autre
+    const float ALPHA = 0.3f; 
 
-    // Si on a un scan vide, on laisse le filtre retomber doucement vers 0
-    if (scan == NULL || scan->index == 0) {
-        sum_vx = 0.0f;
-        sum_vy = 0.0f;
-    }
-
-    // Application du filtre de lissage
     filtered_vx = ALPHA * sum_vx + (1.0f - ALPHA) * filtered_vx;
     filtered_vy = ALPHA * sum_vy + (1.0f - ALPHA) * filtered_vy;
 
-    // On renvoie les valeurs lissées !
     *rep_vx = filtered_vx;
     *rep_vy = filtered_vy;
 }
