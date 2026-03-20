@@ -50,17 +50,9 @@ void Move_Loop(){
                 
                 if(motors[i].step_pin){
                     if(motors[i].dir_pin){
-                        if(i == 1){
-                            motors[i].current_position--; // Move backward for motor 2
-                        } else {
-                            motors[i].current_position++; // Move forward for motors 1 and 3
-                        }
+                        motors[i].current_position++;
                     } else {
-                        if(i == 1){
-                            motors[i].current_position++; // Move forward for motor 2
-                        } else {
-                            motors[i].current_position--; // Move backward for motors 1 and 3
-                        }
+                        motors[i].current_position--;
                     }
                 }
             }

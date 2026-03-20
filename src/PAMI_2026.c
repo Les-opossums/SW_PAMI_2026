@@ -84,7 +84,7 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                Asserv_Loop();
+                // Asserv_Loop();
                 if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
                     // printf("ROBOTDATA 1 2 3 4 5 6\n");
 
