@@ -57,6 +57,8 @@ int main()
     Fusion_Init(0.0f, 0.0f, 0.0f); // init x y theta
     Init_All();
 
+    led_rgb_init();
+
     Path_Init();
     // Launch Lidar on Core 1
     multicore_launch_core1(core1_entry);
@@ -74,6 +76,9 @@ int main()
 
         // Met à jour les moteurs pas à pas
         Move_Loop();
+
+        led_rgb_set_color(0, 0, 255); 
+        sleep_ms(1000);
 
         switch (sequencer) {
             case 0:

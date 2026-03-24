@@ -21,6 +21,9 @@
 #include "Interpreteur.h"
 #include "BAU.h"
 
+//include for led ws2812
+#include "lib_ws2812/ws2812.h"
+
 //include for LD19 LIDAR
 #include "lib_lidar/LIDAR_LD19.h"
 #include "lib_lidar/LIDAR_UART.h"
