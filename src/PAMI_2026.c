@@ -57,6 +57,9 @@ int main()
     Fusion_Init(0.0f, 0.0f, 0.0f); // init x y theta
     Init_All();
 
+    //lecture de la pin de la laisse
+    bool last_leash_state = gpio_get(LEASH_PIN);
+
     led_rgb_init();
 
     Path_Init();
@@ -66,6 +69,14 @@ int main()
     printf("PAMI-2026 ready (Lidar + Screen).\n");
 
     while (true) {
+        // Lecture de l'état actuel du PIN
+        bool current_leash_state = gpio_get(LEASH_PIN);
+        if (current_leash_state != last_leash_state) {
+            sleep_ms(50);
+            // On affiche le message demandé
+            printf("LEASH : %s\n", current_leash_state ? "ACTIVE" : "INACTIVE");
+            last_leash_state = current_leash_state;
+        }
         // --- A. Screen Update ---
         // On met à jour l'animation à chaque tour de boucle
         // minion_eye_update_non_blocking();
@@ -145,6 +156,10 @@ void Init_All(void)
 {
     init_motors();
     Init_Asserv();
+
+    //init laisse
+    gpio_init(LEASH_PIN);
+    gpio_set_dir(LEASH_PIN, GPIO_IN);
 }
 
 uint8_t FREQ_Cmd(void) {

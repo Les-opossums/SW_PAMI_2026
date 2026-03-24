@@ -11,4 +11,8 @@
 #define PIN_STEP_3 2
 #define PIN_DIR_3 3
 
+
+#define LEASH_PIN 9
+
+
 #endif // PAMI_2026_IO_H
