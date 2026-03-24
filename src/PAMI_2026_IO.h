@@ -16,5 +16,7 @@
 
 #define AU_PIN 6
 
+#define TEAM_PIN 10
+
 
 #endif // PAMI_2026_IO_H

@@ -65,6 +65,11 @@ int main()
 
     bool last_au_state = gpio_get(AU_PIN);
     bool current_au_state = last_au_state;
+    bool au_state = current_au_state; // 0 = normal mode, 1 = AU mode (no asserv, no LED update)
+
+    bool last_team_state = gpio_get(TEAM_PIN);
+    bool current_team_state = last_team_state;
+    bool team_state = current_team_state; // 0 = BLUE, 1 = YELLOW
 
     led_rgb_init();
 
@@ -89,13 +94,24 @@ int main()
             last_leash_state = current_leash_state;
         }
 
+        // Lecture de l'état actuel du PIN TEAM
+        current_team_state = gpio_get(TEAM_PIN);
+        if (current_team_state != last_team_state) {
+            sleep_ms(50);
+            if(current_team_state) {
+                team_state = 0; // Team BLUE
+            } else {
+                team_state = 1; // Team YELLOW
+            }
+            last_team_state = current_team_state;
+        }
 
         // Lecture de l'état actuel du PIN AU
         current_au_state = gpio_get(AU_PIN);
         if (current_au_state != last_au_state) {
             sleep_ms(50);
-            // On affiche le message demandé
-            printf("AU : %s\n", current_au_state ? "INACTIVE" : "ACTIVE");
+            // On affiche le message demandé 0 ou 1
+            printf("AU : %d\n", current_au_state);
             last_au_state = current_au_state;
         }
 
@@ -119,7 +135,7 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                if (current_au_state == 0) { // Only run asserv loop if not in AU mode
+                if (current_au_state == 1) { // Only run asserv loop if not in AU mode
                     Asserv_Loop();
                     if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
                         // printf("ROBOTDATA 1 2 3 4 5 6\n");
@@ -167,11 +183,35 @@ int main()
                 sequencer++;
                 break;
             case 3: // led management
-                if(current_au_state == 1) { // Only update LED if not in AU mode
-                    led_rgb_set_color(100, 0, 0);
-                }else{
-                    led_rgb_set_color(0, 0, 0);
+                // -1 = non initialisé, 0 = Rouge (AU), 1 = Bleu, 2 = Jaune
+                static int current_led_state = -1; 
+                int desired_led_state = 0;
+
+                // 1. On détermine la couleur que l'on veut afficher
+                if (current_au_state == 0) { 
+                    desired_led_state = 0; // Mode Arrêt d'Urgence -> Rouge
+                } else {
+                    if (team_state == 0) {
+                        desired_led_state = 1; // Team BLUE -> Bleu
+                    } else {
+                        desired_led_state = 2; // Team YELLOW -> Jaune
+                    }
                 }
+
+                // 2. On n'envoie la commande QUE si la situation a changé
+                if (desired_led_state != current_led_state) {
+                    if (desired_led_state == 0) {
+                        led_rgb_set_color(100, 0, 0);   // Rouge
+                    } else if (desired_led_state == 1) {
+                        led_rgb_set_color(0, 0, 100);   // Bleu
+                    } else if (desired_led_state == 2) {
+                        led_rgb_set_color(100, 100, 0); // Jaune
+                    }
+                    
+                    // On met à jour la mémoire
+                    current_led_state = desired_led_state;
+                }
+
                 sequencer++;
                 break;
             default:
@@ -195,6 +235,10 @@ void Init_All(void)
     // init AU
     gpio_init(AU_PIN);
     gpio_set_dir(AU_PIN, GPIO_IN);
+
+    //init TEAM
+    gpio_init(TEAM_PIN);
+    gpio_set_dir(TEAM_PIN, GPIO_IN);
 }
 
 uint8_t FREQ_Cmd(void) {
