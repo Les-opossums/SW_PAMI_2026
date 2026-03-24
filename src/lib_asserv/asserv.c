@@ -4,7 +4,7 @@
 
 // ******************************    Variables    *******************************
 int asserv_mode; // asservissement off par defaut (refer to asserv_init function)
-int motion_done;
+int motion_done = 0;
 
 float blocked_time;
 
@@ -211,7 +211,9 @@ void pos_asserv_step(void) {
     
     // 🔥 POUR TESTER : Si tu remplaces LD19.previousScan par NULL ici, 
     // le robot DOIT bouger exactement comme avant.
-    Path_GetRepulsionVector(LD19.previousScan, &rep_vx_local, &rep_vy_local);
+    Path_GetRepulsionVector(NULL, &rep_vx_local, &rep_vy_local);
+        // Path_GetRepulsionVector(LD19.previousScan, &rep_vx_local, &rep_vy_local);
+
 
     // ==========================================
     // 3. FUSION APF

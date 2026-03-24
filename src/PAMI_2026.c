@@ -83,11 +83,12 @@ int main()
         // Lecture de l'état actuel du PIN de la laisse
         current_leash_state = gpio_get(LEASH_PIN);
         if (current_leash_state != last_leash_state) {
-            sleep_ms(50);
+            // sleep_ms(50);
             // On affiche le message demandé
             printf("LEASH : %s\n", current_leash_state ? "ACTIVE" : "INACTIVE");
             if(current_leash_state) {
                 start_match = 1; // Match starts when leash is activated
+                printf("MATCH STARTED\n");
             } else {
                 start_match = 0; // Match ends when leash is deactivated
             }
@@ -97,7 +98,7 @@ int main()
         // Lecture de l'état actuel du PIN TEAM
         current_team_state = gpio_get(TEAM_PIN);
         if (current_team_state != last_team_state) {
-            sleep_ms(50);
+            // sleep_ms(50);
             if(current_team_state) {
                 team_state = 0; // Team BLUE
             } else {
@@ -109,7 +110,7 @@ int main()
         // Lecture de l'état actuel du PIN AU
         current_au_state = gpio_get(AU_PIN);
         if (current_au_state != last_au_state) {
-            sleep_ms(50);
+            // sleep_ms(50);
             // On affiche le message demandé 0 ou 1
             printf("AU : %d\n", current_au_state);
             last_au_state = current_au_state;
@@ -214,6 +215,12 @@ int main()
 
                 sequencer++;
                 break;
+            case 4:
+                if(current_au_state == 1){
+                    script_match(); // Gère la logique de déplacement pendant le match
+                }
+                sequencer++;
+                break;
             default:
                 sequencer = 0;
                 break;
@@ -248,4 +255,67 @@ uint8_t FREQ_Cmd(void) {
     }
     freq_robot_data_update = (int)val32;
     return 0;
+}
+
+
+
+int match_state = 0;
+int timer_match = 0;
+int timer_match_delay = 5000; // ms à changer en 85000 pour la vraie durée d'un match
+int timer_match_delay_endgame = 100000; // ms 
+Position Goal_Pos;
+
+
+void script_match(void) {
+    switch (match_state) {
+        case 0:
+            if (start_match) {
+                timer_match = Timer_ms1;
+                match_state++;
+            }
+            break;
+        case 1:
+            if ((Timer_ms1 - timer_match) > timer_match_delay && (Timer_ms1 - timer_match) < timer_match_delay_endgame) {
+                // Actions du début de match (ex: se déplacer à un endroit stratégique)
+                Goal_Pos.x = 0.6;
+                Goal_Pos.y = 0.0;
+                Goal_Pos.t = 0.0;
+                motion_pos(Goal_Pos);
+                timer_match = Timer_ms1; // reset timer for next phase
+                match_state++;
+            }
+            break;
+        case 2:
+                if ((Timer_ms1 - timer_match) > 5000) {
+                    timer_match = Timer_ms1; // reset timer for next phase
+                    match_state++;
+                }
+                break;
+        case 3:
+            if (motion_done == 1) {
+                Goal_Pos.x = 0.6;
+                Goal_Pos.y = 0.0;
+                Goal_Pos.t = 3.14159; // 180 degrees in radians
+                motion_pos(Goal_Pos);
+                match_state++;
+            }
+            break;
+        case 4:
+            if ((Timer_ms1 - timer_match) > 5000) {
+                timer_match = Timer_ms1; // reset timer for next phase
+                match_state++;
+            }
+            break;
+        case 5:
+            if (motion_done == 1) {
+                Goal_Pos.x = 0.0;
+                Goal_Pos.y = 0.0;
+                Goal_Pos.t = 3.14159; // 180 degrees in radians
+                motion_pos(Goal_Pos);
+                match_state++;
+            }
+            break;
+        default:
+            break;
+    }
 }
