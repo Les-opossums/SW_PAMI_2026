@@ -84,7 +84,7 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                // Asserv_Loop();
+                Asserv_Loop();
                 if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
                     // printf("ROBOTDATA 1 2 3 4 5 6\n");
 
@@ -98,10 +98,10 @@ int main()
                     has_data = true;
                 }
                 if(has_data){
-                    // // 1. On récupère la position actuelle de la fusion (EN MÈTRES)
+                    // 1. On récupère la position actuelle de la fusion (EN MÈTRES)
                     // RobotPose current_belief = Fusion_GetState();
                     
-                    // // 2. On la convertit EN MILLIMÈTRES pour aider la localisation
+                    // 2. On la convertit EN MILLIMÈTRES pour aider la localisation
                     // // (au cas où Loc_ProcessScan s'en sert pour filtrer ses données)
                     // RobotPose belief_for_loc = current_belief;
                     // belief_for_loc.x *= 1000.0f;
