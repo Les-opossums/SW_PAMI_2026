@@ -99,7 +99,6 @@ int main()
             last_au_state = current_au_state;
         }
 
-
         // --- A. Screen Update ---
         // On met à jour l'animation à chaque tour de boucle
         // minion_eye_update_non_blocking();
@@ -165,9 +164,16 @@ int main()
                 //     printf(">robot:%d:%d|xy,clr\n", (int)(final.x * 1000.0f), (int)(final.y * 1000.0f));
                 //     printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
                 // }
-                sequencer = 0;
+                sequencer++;
                 break;
-
+            case 3: // led management
+                if(current_au_state == 1) { // Only update LED if not in AU mode
+                    led_rgb_set_color(100, 0, 0);
+                }else{
+                    led_rgb_set_color(0, 0, 0);
+                }
+                sequencer++;
+                break;
             default:
                 sequencer = 0;
                 break;
