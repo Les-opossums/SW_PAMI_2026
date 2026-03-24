@@ -14,5 +14,7 @@
 
 #define LEASH_PIN 9
 
+#define AU_PIN 6
+
 
 #endif // PAMI_2026_IO_H

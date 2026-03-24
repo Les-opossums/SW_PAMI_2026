@@ -16,6 +16,8 @@
 int freq_robot_data_update = 20; // Hz
 int last_robot_data_update_time = 0;
 
+int start_match = 0; // Set to 1 when the match starts (e.g., when the leash is activated)
+
 // --- Helper: Ease-Out Interpolation ---
 // Makes movement look organic (fast start, slow stop)
 float ease_out_cubic(float t) {
@@ -59,6 +61,10 @@ int main()
 
     //lecture de la pin de la laisse
     bool last_leash_state = gpio_get(LEASH_PIN);
+    bool current_leash_state = last_leash_state;
+
+    bool last_au_state = gpio_get(AU_PIN);
+    bool current_au_state = last_au_state;
 
     led_rgb_init();
 
@@ -69,14 +75,31 @@ int main()
     printf("PAMI-2026 ready (Lidar + Screen).\n");
 
     while (true) {
-        // Lecture de l'état actuel du PIN
-        bool current_leash_state = gpio_get(LEASH_PIN);
+        // Lecture de l'état actuel du PIN de la laisse
+        current_leash_state = gpio_get(LEASH_PIN);
         if (current_leash_state != last_leash_state) {
             sleep_ms(50);
             // On affiche le message demandé
             printf("LEASH : %s\n", current_leash_state ? "ACTIVE" : "INACTIVE");
+            if(current_leash_state) {
+                start_match = 1; // Match starts when leash is activated
+            } else {
+                start_match = 0; // Match ends when leash is deactivated
+            }
             last_leash_state = current_leash_state;
         }
+
+
+        // Lecture de l'état actuel du PIN AU
+        current_au_state = gpio_get(AU_PIN);
+        if (current_au_state != last_au_state) {
+            sleep_ms(50);
+            // On affiche le message demandé
+            printf("AU : %s\n", current_au_state ? "INACTIVE" : "ACTIVE");
+            last_au_state = current_au_state;
+        }
+
+
         // --- A. Screen Update ---
         // On met à jour l'animation à chaque tour de boucle
         // minion_eye_update_non_blocking();
@@ -97,11 +120,13 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                Asserv_Loop();
-                if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
-                    // printf("ROBOTDATA 1 2 3 4 5 6\n");
+                if (current_au_state == 0) { // Only run asserv loop if not in AU mode
+                    Asserv_Loop();
+                    if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
+                        // printf("ROBOTDATA 1 2 3 4 5 6\n");
 
-                    last_robot_data_update_time = Timer_ms1;
+                        last_robot_data_update_time = Timer_ms1;
+                    }
                 }
                 sequencer++;
                 break;
@@ -160,6 +185,10 @@ void Init_All(void)
     //init laisse
     gpio_init(LEASH_PIN);
     gpio_set_dir(LEASH_PIN, GPIO_IN);
+
+    // init AU
+    gpio_init(AU_PIN);
+    gpio_set_dir(AU_PIN, GPIO_IN);
 }
 
 uint8_t FREQ_Cmd(void) {
