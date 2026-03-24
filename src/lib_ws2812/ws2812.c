@@ -26,3 +26,15 @@ void led_rgb_set_color(uint8_t r, uint8_t g, uint8_t b) {
     // On décale de 8 bits vers la gauche car le PIO est configuré pour envoyer 24 bits
     pio_sm_put_blocking(pio, sm, color << 8u);
 }
+
+uint8_t led_cmd(void) {
+    uint32_t r, g, b;
+    if (Get_Param_u32(&r) || Get_Param_u32(&g) || Get_Param_u32(&b)) {
+        return 1; // Erreur de paramètre
+    }
+    if (r > 255 || g > 255 || b > 255) {
+        return 1; // Valeurs hors de portée
+    }
+    led_rgb_set_color((uint8_t)r, (uint8_t)g, (uint8_t)b);
+    return 0; // Succès
+}

@@ -77,9 +77,6 @@ int main()
         // Met à jour les moteurs pas à pas
         Move_Loop();
 
-        led_rgb_set_color(0, 0, 255); 
-        sleep_ms(1000);
-
         switch (sequencer) {
             case 0:
                 c = getchar_timeout_us(0);

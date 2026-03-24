@@ -29,6 +29,8 @@ const Command Command_List[] = {
     { "VTMAX", VTMAX_Cmd},
     { "AMAX", AMAX_Cmd},
 
+    { "LED", led_cmd},
+
     { "FREQ", FREQ_Cmd},
 
     { "PARAM_ASSERV", Param_Asserv_Cmd},
