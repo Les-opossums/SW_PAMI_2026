@@ -60,33 +60,31 @@ int main()
     Init_All();
 
     // --- Initialisation du Wi-Fi ---
+
     bool wifi_initialized = false;
     bool wifi_connected = false;
 
     if (cyw43_arch_init() == 0) {
         wifi_initialized = true;
         cyw43_arch_enable_sta_mode();
-        
+
         printf("Connexion au Wi-Fi...\n");
-        // Remplace par ton SSID et Mot de passe
         if (cyw43_arch_wifi_connect_timeout_ms("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK, 10000)) {
             printf("Échec de la connexion Wi-Fi. Le robot passe en mode STANDALONE.\n");
-            // SUPPRESSION DU return 1; ICI
+            // ON NE MET PLUS DE return 1; ICI !
         } else {
             printf("Wi-Fi connecté !\n");
             wifi_connected = true;
-            // Afficher l'adresse IP
             extern cyw43_t cyw43_state;
             uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
             printf("Adresse IP: %d.%d.%d.%d\n", 
                 ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
         }
     } else {
-        printf("Échec de l'initialisation de la puce Wi-Fi. Le robot passe en mode STANDALONE.\n");
-        // SUPPRESSION DU return 1; ICI
+        printf("Échec de l'initialisation de la puce Wi-Fi. Mode STANDALONE.\n");
     }
 
-    // --- Démarrage du serveur TCP ---
+    // --- Démarrage du serveur TCP (Uniquement si connecté) ---
     tcp_server_t *tcp_state = NULL;
     if (wifi_connected) {
         tcp_state = tcp_server_open();
@@ -96,7 +94,7 @@ int main()
             printf("Serveur TCP prêt sur le port %d\n", TCP_SERVER_PORT);
         }
     } else {
-        printf("Serveur TCP ignoré (pas de connexion Wi-Fi).\n");
+        printf("Serveur TCP ignoré (Mode Standalone).\n");
     }
 
     //lecture de la pin de la laisse
@@ -273,39 +271,7 @@ int main()
             case 5:
                 // On s'assure que la puce est bien initialisée avant de lui parler
                 if (wifi_initialized) {
-                    cyw43_arch_poll(); // Nécessaire pour le traitement Wi-Fi en arrière-plan
-
-                    // On vérifie l'état du Wi-Fi toutes les 1000 ms
-                    if ((Timer_ms1 - last_wifi_check_time) > 1000) {
-                        last_wifi_check_time = Timer_ms1;
-                        
-                        // Récupération de l'état de la liaison
-                        int link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
-                        
-                        // Si le lien est rompu (négatif ou DOWN) et qu'on n'est pas déjà en train d'essayer
-                        if (link_status < 0 || link_status == CYW43_LINK_DOWN) {
-                            if (!wifi_reconnecting) {
-                                printf("Perte de connexion Wi-Fi. Tentative de reconnexion en arrière-plan...\n");
-                                // Lancement de la connexion ASYNCHRONE (non-bloquante)
-                                cyw43_arch_wifi_connect_async("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK);
-                                wifi_reconnecting = true;
-                                wifi_connected = false;
-                            }
-                        } 
-                        // Si le lien est de nouveau actif (UP)
-                        else if (link_status == CYW43_LINK_UP) {
-                            if (wifi_reconnecting) {
-                                printf("Wi-Fi reconnecté avec succès en arrière-plan !\n");
-                                wifi_reconnecting = false;
-                                wifi_connected = true;
-                                
-                                // Optionnel : Réafficher la nouvelle adresse IP
-                                uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-                                printf("Nouvelle IP: %d.%d.%d.%d\n", 
-                                    ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
-                            }
-                        }
-                    }
+                    cyw43_arch_poll();
                 }
                 sequencer++;
                 break;

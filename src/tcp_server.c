@@ -162,20 +162,16 @@ err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
         return ERR_VAL;
     }
 
-    // On informe lwIP que la connexion est gérée, sinon il refusera 
-    // systématiquement les futures connexions !
+    // ---> LA LIGNE MAGIQUE POUR AUTORISER LES FUTURES RECONNEXIONS <---
     tcp_accepted(state->server_pcb);
 
-    // --- Tuer l'ancienne connexion fantôme s'il y en a une ---
+    // Si un ancien client fantôme est là, on le dégage
     if (state->client_pcb != NULL) {
-        printf("Un client est deja connecte. Fermeture de l'ancienne connexion.\n");
-        tcp_abort(state->client_pcb); // On tue l'ancienne
-        state->client_pcb = NULL;
+        tcp_abort(state->client_pcb);
     }
 
     printf("Client connected ACCEPTED. Setting is_connected = true\n");
     state->client_pcb = client_pcb;
-    // ... (le reste de ta fonction reste inchangé)
     state->is_connected = true;
     state->can_send = true;
 
