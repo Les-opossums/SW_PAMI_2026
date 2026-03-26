@@ -151,6 +151,7 @@ uint8_t SET0_Cmd(void) {
     Pos.y = 0;
     Pos.t = 0;
     set_position(Pos);
+    Fusion_Init(0.0f, 0.0f, 0.0f);
     return 0;
 }
 
