@@ -15,6 +15,22 @@
 #define HIST_CENTER (HIST_SIZE / 2) // center index of histogram
 #define MIN_WALL_PTS 5 // minimum number of points to consider a wall valid
 
+static float refine_peak(const uint16_t* hist, int peak_idx) {
+    if (peak_idx < 1 || peak_idx >= HIST_SIZE - 1) return (float)peak_idx;
+    
+    float sum = 0.0f;
+    float count = 0.0f;
+    
+    for (int i = peak_idx - 1; i <= peak_idx + 1; i++) {
+        sum += i * hist[i];
+        count += hist[i];
+    }
+    
+    if (count > 0.0f) {
+        return sum / count;
+    }
+    return (float)peak_idx;
+}
 // Helpers mathématiques
 static float normalize_angle(float angle) {
     while (angle < 0.0f) angle += M_TWO_PI;
@@ -81,31 +97,9 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         return result;
     }
 
-    // step 1 : determine heading modulo 90 degrees
-    float align_angle_mod90 = find_grid_alignement_rad(scan);
-    
-    // --- LEVÉE D'AMBIGUÏTÉ (Unwrapping) ---
-    // On cherche le multiple de 90° qui correspond le mieux au cap estimé du robot
-    float best_diff = 1000.0f;
-    float global_theta = align_angle_mod90;
-    
-    // On teste les 4 orientations possibles de la table
-    for (int i = -2; i <= 2; i++) {
-        float test_theta = align_angle_mod90 + (i * M_PI / 2.0f);
-        float diff = fabsf(angle_diff_rad(prev_pose->theta, test_theta));
-        
-        if (diff < best_diff) {
-            best_diff = diff;
-            global_theta = normalize_angle(test_theta);
-        }
-    }
+    // step 1 : determine heading (orientation)
+    float global_theta = prev_pose->theta;
 
-    // Si le Lidar propose un cap aberrant par rapport à l'odométrie (ex: robot emporté), on rejette
-    if (best_diff > (M_PI / 4.0f)) { 
-        return result;
-    }
-
-    // step 2 : rotate points to align with global frame
     float cos_theta = cosf(global_theta);
     float sin_theta = sinf(global_theta);
 
@@ -114,112 +108,115 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     uint16_t y_hist[HIST_SIZE] = {0};
 
     for (int i = 0; i < scan->index; i++) {
-        // ignore invalid or out of range points
         if(scan->points[i].distance < 50 || scan->points[i].distance > 3500) continue;
 
-        // ---------------------------------------------------------
-        // CORRECTION DES AXES : On force le Lidar à correspondre à l'odométrie.
-        // L'avant du Lidar (axe Y) devient l'avant du robot (axe X).
-        // ---------------------------------------------------------
-        // 1. FORCER L'ALIGNEMENT DU CAPTEUR AVEC LE ROBOT
-        float lidar_x = scan->points[i].y;
-        float lidar_y = -scan->points[i].x;
+        float lidar_x = scan->points[i].x;
+        // --- INVERSION Y ICI ---
+        // Le Lidar a la tête en bas (Roll 180°), donc la gauche devient la droite !
+        float lidar_y = -scan->points[i].y; 
 
-        // 2. ROTATION AVEC LES BONNES VARIABLES
+        // Rotation pour aligner les murs avec la table
         float x_rot = lidar_x * cos_theta - lidar_y * sin_theta;
         float y_rot = lidar_x * sin_theta + lidar_y * cos_theta;
 
-        // compute histogram indices
         int x_idx = (int)(x_rot / HIST_RES) + HIST_CENTER;
         int y_idx = (int)(y_rot / HIST_RES) + HIST_CENTER;
 
-        // accumulate in histograms if within bounds
-        if (x_idx >= 0 && x_idx < HIST_SIZE) {
-            x_hist[x_idx]++;
+        if (x_idx >= 0 && x_idx < HIST_SIZE) x_hist[x_idx]++;
+        if (y_idx >= 0 && y_idx < HIST_SIZE) y_hist[y_idx]++;
+    }
+
+    // step 4: Windowed Peak Search (Recherche ciblée)
+    // On cherche les murs uniquement autour de là où l'odométrie pense qu'ils sont (± 40 cm)
+    int search_window = 400 / HIST_RES; 
+
+    int expected_left_idx   = (int)(-prev_pose->x / HIST_RES) + HIST_CENTER;
+    int expected_right_idx  = (int)((TABLE_SIZE_X - prev_pose->x) / HIST_RES) + HIST_CENTER;
+    int expected_bottom_idx = (int)(-prev_pose->y / HIST_RES) + HIST_CENTER;
+    int expected_top_idx    = (int)((TABLE_SIZE_Y - prev_pose->y) / HIST_RES) + HIST_CENTER;
+
+    int left_idx = -1, right_idx = -1, bottom_idx = -1, top_idx = -1;
+    int max_val;
+
+    // Mur Gauche (X=0)
+    max_val = 0;
+    for (int i = expected_left_idx - search_window; i <= expected_left_idx + search_window; i++) {
+        if (i >= 0 && i < HIST_SIZE && x_hist[i] > max_val && x_hist[i] >= MIN_WALL_PTS) {
+            max_val = x_hist[i]; left_idx = i;
         }
-        if (y_idx >= 0 && y_idx < HIST_SIZE) {
-            y_hist[y_idx]++;
+    }
+    // Mur Droit (X=2000)
+    max_val = 0;
+    for (int i = expected_right_idx - search_window; i <= expected_right_idx + search_window; i++) {
+        if (i >= 0 && i < HIST_SIZE && x_hist[i] > max_val && x_hist[i] >= MIN_WALL_PTS) {
+            max_val = x_hist[i]; right_idx = i;
+        }
+    }
+    // Mur Bas (Y=0)
+    max_val = 0;
+    for (int i = expected_bottom_idx - search_window; i <= expected_bottom_idx + search_window; i++) {
+        if (i >= 0 && i < HIST_SIZE && y_hist[i] > max_val && y_hist[i] >= MIN_WALL_PTS) {
+            max_val = y_hist[i]; bottom_idx = i;
+        }
+    }
+    // Mur Haut (Y=3000)
+    max_val = 0;
+    for (int i = expected_top_idx - search_window; i <= expected_top_idx + search_window; i++) {
+        if (i >= 0 && i < HIST_SIZE && y_hist[i] > max_val && y_hist[i] >= MIN_WALL_PTS) {
+            max_val = y_hist[i]; top_idx = i;
         }
     }
 
-    // step 4: find wall boundaries (outside-in search)
-    int left_idx = -1; 
-    int right_idx = -1;
-    int top_idx = -1;
-    int bottom_idx = -1;
-
-    // find left wall
-    for (int i = 0; i < HIST_CENTER; i++) {
-        if (x_hist[i] >= MIN_WALL_PTS) {
-            left_idx = i;
-            break;
-        }
-    }
-    // find right wall
-    for (int i = HIST_SIZE - 1; i >= HIST_CENTER; i--) {
-        if (x_hist[i] >= MIN_WALL_PTS) {
-            right_idx = i;
-            break;
-        }
-    }
-    // find bottom wall
-    for (int i = 0; i < HIST_CENTER; i++) {
-        if (y_hist[i] >= MIN_WALL_PTS) {
-            bottom_idx = i;
-            break;
-        }
-    }
-    // find top wall
-    for (int i = HIST_SIZE - 1; i >= HIST_CENTER; i--) {
-        if (y_hist[i] >= MIN_WALL_PTS) {
-            top_idx = i;
-            break;
-        }
+    // step 5: Compute robot position in global frame avec le Barycentre
+    float calculated_x = prev_pose->x; 
+    bool x_updated = false;
+    
+    // Si on voit l'un des deux murs X, on met à jour avec précision décimale
+    if (left_idx != -1) {
+        float exact_idx = refine_peak(x_hist, left_idx);
+        calculated_x = -(exact_idx - HIST_CENTER) * HIST_RES;
+        x_updated = true;
+    } else if (right_idx != -1) {
+        float exact_idx = refine_peak(x_hist, right_idx);
+        calculated_x = TABLE_SIZE_X - ((exact_idx - HIST_CENTER) * HIST_RES);
+        x_updated = true;
     }
 
-    // if any wall is missing, return invalid
-    if (left_idx == -1 || right_idx == -1 || top_idx == -1 || bottom_idx == -1) {
+    float calculated_y = prev_pose->y; 
+    bool y_updated = false;
+    
+    // Pareil pour Y
+    if (bottom_idx != -1) {
+        float exact_idx = refine_peak(y_hist, bottom_idx);
+        calculated_y = -(exact_idx - HIST_CENTER) * HIST_RES;
+        y_updated = true;
+    } else if (top_idx != -1) {
+        float exact_idx = refine_peak(y_hist, top_idx);
+        calculated_y = TABLE_SIZE_Y - ((exact_idx - HIST_CENTER) * HIST_RES);
+        y_updated = true;
+    }
+
+    // Si on ne voit vraiment rien (gros blocage), on rejette proprement
+    if (!x_updated && !y_updated) {
         return result;
     }
 
-    // step 5: calculate measured room dimensions
-    float span_x = (right_idx - left_idx) * HIST_RES;
-    float span_y = (top_idx - bottom_idx) * HIST_RES;
-
-    // calculate distance from robot to the left and bottom walls
-    float dist_to_left = (left_idx - HIST_CENTER) * HIST_RES;
-    float dist_to_bottom = (bottom_idx - HIST_CENTER) * HIST_RES;
-
-    // step 6: compute robot position in global frame
-    if (fabsf(span_x - TABLE_SIZE_X) < LOC_TOLERANCE_MM &&
-        fabsf(span_y - TABLE_SIZE_Y) < LOC_TOLERANCE_MM) {
+    // step 6: Gating (Filtre anti-téléportation)
+    // On vérifie que la correction ne propose pas un saut aberrant (> 300 mm)
+    float dx = calculated_x - prev_pose->x;
+    float dy = calculated_y - prev_pose->y;
+    float dist_jump = sqrtf(dx*dx + dy*dy);
+    
+    if (dist_jump <= 300.0f) {
+        result.x = calculated_x;
+        result.y = calculated_y;
         
-        float calculated_x = -dist_to_left;
-        float calculated_y = -dist_to_bottom;
+        // On renvoie l'angle de l'odométrie (erreur d_theta = 0)
+        result.theta = prev_pose->theta; 
         
-        // --- FILTRAGE PAR DISTANCE (GATING) ---
-        // On calcule le saut de position par rapport à l'estimation précédente
-        float dx = calculated_x - prev_pose->x;
-        float dy = calculated_y - prev_pose->y;
-        float dist_jump = sqrtf(dx*dx + dy*dy);
-        
-        // Seuil de 300mm max. Si un robot masque le Lidar, la position trouvée 
-        // sera très éloignée de la réalité et on la rejette.
-        if (dist_jump <= 300.0f) {
-            result.x = calculated_x;
-            result.y = calculated_y;
-            result.theta = global_theta;
-            result.valid = true;
-        }
-        
-        return result;
-    }
-    // CASE B : rotated 90 degrees (on rejette explicitement pour éviter l'inversion X/Y)
-    else if (fabsf(span_x - TABLE_SIZE_Y) < LOC_TOLERANCE_MM &&
-             fabsf(span_y - TABLE_SIZE_X) < LOC_TOLERANCE_MM) {
-        return result; 
+        result.valid = true;
     }
 
-    // Sécurité : toujours retourner result (qui est invalid par défaut ici)
+    return result;
     return result;
 }

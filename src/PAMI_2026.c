@@ -1,5 +1,9 @@
 #include "PAMI_2026.h"
 
+#ifndef M_TWO_PI
+#define M_TWO_PI 6.28318530717958647692f
+#endif
+
 // ==========================================
 // --- Configuration SCREEN (Feature/Screen) ---
 // ==========================================
@@ -7,6 +11,8 @@
 #define CENTER_Y 120
 #define MAX_PUPIL_DIST 35  // How far the eye can look from center
 #define BLINK_CLOSE_Y 110  // How far eyelids close (120 = fully closed)
+
+int lidar_loc_en = 1; // 0 = off, 1 = on (use lidar for localization correction)
 
 // Pin configuration
 // #define LCD_CS_PIN 17
@@ -190,44 +196,56 @@ int main()
                 sequencer++;
                 break;
             case 2:
+                static RobotPose snapshot_pose; // La "photo" de l'odométrie
+
                 if(LD19.newScan){
                     LD19.newScan = 0;
+                    // 1. On prend une photo de la position EXACTE à la fin du scan Lidar
+                    snapshot_pose = Fusion_GetState(); 
                     has_data = true;
                 }
+
                 if(has_data){
-                    // 1. On récupère la position actuelle de la fusion (EN MÈTRES)
-                    RobotPose current_belief = Fusion_GetState();
-                    
-                    // 2. On la convertit EN MILLIMÈTRES pour aider la localisation
-                    RobotPose belief_for_loc = current_belief;
+                    // 2. On aide la localisation avec notre photo (en mm)
+                    RobotPose belief_for_loc = snapshot_pose;
                     belief_for_loc.x *= 1000.0f;
                     belief_for_loc.y *= 1000.0f;
 
-                    // 3. La localisation fait son calcul et sort un résultat (EN MILLIMÈTRES)
-                    // On passe bien l'adresse &belief_for_loc car la fonction attend un pointeur
+                    // --- CALCUL LONG (~100ms) ---
+                    // Pendant ce temps, l'asservissement continue de faire avancer le robot
                     RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
-                    // printf("MEASURED : x=%.1fmm y=%.1fmm t=%.2frad valid=%d\n", measured.x, measured.y, measured.theta, measured.valid);
                     
-                    if (measured.valid){
-                        // 4. On convertit la mesure validée EN MÈTRES avant de l'envoyer à la fusion
+                    if (measured.valid && lidar_loc_en){
+                        printf("LIDAR LOC: x=%.1f y=%.1f t=%.2f\n", measured.x, measured.y, measured.theta);
+
                         measured.x /= 1000.0f;
                         measured.y /= 1000.0f;
                         
-                        // L'angle theta est déjà en radians, pas besoin de le modifier
-                        Fusion_Correct(measured);
-                    }
-                    
-                    // Décommenter si tu as besoin du debug teleplot du lidar brut
-                    // LD19_printScanTeleplot(&LD19);
-                }
+                        // 3. CALCUL DE L'ERREUR DANS LE PASSÉ
+                        // Quelle est la vraie erreur constatée par le Lidar à l'instant t-100ms ?
+                        float err_x = measured.x - snapshot_pose.x;
+                        float err_y = measured.y - snapshot_pose.y;
+                        
+                        float err_t = measured.theta - snapshot_pose.theta;
+                        while (err_t < -M_PI) err_t += M_TWO_PI;
+                        while (err_t >  M_PI) err_t -= M_TWO_PI;
 
-                // Pour l'affichage Teleplot (Debug)
-                RobotPose final = Fusion_GetState();
-                if(Timer_ms1 % 100 == 0){
-                    // final.x et final.y sont en mètres, on les multiplie par 1000 pour l'affichage
-                    // printf(">robot:%d:%d|xy,clr\n", (int)(final.x * 1000.0f), (int)(final.y * 1000.0f));
+                        // 4. PROJECTION DANS LE PRÉSENT
+                        // On récupère la position actuelle (qui a avancé)
+                        RobotPose actual_now = Fusion_GetState();
+                        
+                        // On crée une mesure "virtuelle" : ce que le Lidar mesurerait MAINTENANT
+                        RobotPose projected_lidar = measured;
+                        projected_lidar.x = actual_now.x + err_x;
+                        projected_lidar.y = actual_now.y + err_y;
+                        projected_lidar.theta = actual_now.theta + err_t;
+
+                        // 5. APPEL DE TA FONCTION
+                        // Ta fonction va calculer la diff entre projected_lidar et state (donc retomber sur nos err_x/err_y)
+                        // et appliquer tes FUSION_GAIN et tes sécurités MAX_FUSION_JUMP !
+                        Fusion_Correct(projected_lidar);
+                    }
                 }
-                
                 sequencer++;
                 break;
             case 3: // led management
