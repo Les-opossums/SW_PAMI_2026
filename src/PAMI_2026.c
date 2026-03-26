@@ -56,7 +56,7 @@ int main()
 
     // 3. Initialize Robot Logic (HEAD)
     int sequencer = 0;
-    Fusion_Init(0.0f, 0.0f, 0.0f); // init x y theta
+    Fusion_Init(0.2f, 0.2f, 1.5f); // init x y theta
     Init_All();
 
     // --- Initialisation du Wi-Fi ---
@@ -198,34 +198,38 @@ int main()
                 }
                 if(has_data){
                     // 1. On récupère la position actuelle de la fusion (EN MÈTRES)
-                    // RobotPose current_belief = Fusion_GetState();
+                    RobotPose current_belief = Fusion_GetState();
                     
                     // 2. On la convertit EN MILLIMÈTRES pour aider la localisation
-                    // // (au cas où Loc_ProcessScan s'en sert pour filtrer ses données)
-                    // RobotPose belief_for_loc = current_belief;
-                    // belief_for_loc.x *= 1000.0f;
-                    // belief_for_loc.y *= 1000.0f;
+                    RobotPose belief_for_loc = current_belief;
+                    belief_for_loc.x *= 1000.0f;
+                    belief_for_loc.y *= 1000.0f;
 
-                    // // 3. La localisation fait son calcul et sort un résultat (EN MILLIMÈTRES)
-                    // RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
+                    // 3. La localisation fait son calcul et sort un résultat (EN MILLIMÈTRES)
+                    // On passe bien l'adresse &belief_for_loc car la fonction attend un pointeur
+                    RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
+                    // printf("MEASURED : x=%.1fmm y=%.1fmm t=%.2frad valid=%d\n", measured.x, measured.y, measured.theta, measured.valid);
                     
-                    // if (measured.valid){
-                    //     // 4. On convertit la mesure validée EN MÈTRES avant de l'envoyer à la fusion
-                    //     measured.x /= 1000.0f;
-                    //     measured.y /= 1000.0f;
+                    if (measured.valid){
+                        // 4. On convertit la mesure validée EN MÈTRES avant de l'envoyer à la fusion
+                        measured.x /= 1000.0f;
+                        measured.y /= 1000.0f;
                         
-                    //     Fusion_Correct(measured);
-                    // }
+                        // L'angle theta est déjà en radians, pas besoin de le modifier
+                        Fusion_Correct(measured);
+                    }
+                    
+                    // Décommenter si tu as besoin du debug teleplot du lidar brut
                     // LD19_printScanTeleplot(&LD19);
                 }
 
-                // Pour l'affichage, on reconvertit en mm si nécessaire
-                // RobotPose final = Fusion_GetState();
-                // if(Timer_ms1 % 100 == 0){
-                //     // final.x et final.y sont en mètres, on les multiplie par 1000 pour l'affichage (si ton interface attend des mm)
-                //     printf(">robot:%d:%d|xy,clr\n", (int)(final.x * 1000.0f), (int)(final.y * 1000.0f));
-                //     printf(">room:0:0;1000:0;1000:2000;0:2000;0:0|xy,clr\n");
-                // }
+                // Pour l'affichage Teleplot (Debug)
+                RobotPose final = Fusion_GetState();
+                if(Timer_ms1 % 100 == 0){
+                    // final.x et final.y sont en mètres, on les multiplie par 1000 pour l'affichage
+                    // printf(">robot:%d:%d|xy,clr\n", (int)(final.x * 1000.0f), (int)(final.y * 1000.0f));
+                }
+                
                 sequencer++;
                 break;
             case 3: // led management

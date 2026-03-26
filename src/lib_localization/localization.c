@@ -1,11 +1,12 @@
 #include "../PAMI_2026.h"
+#include <math.h>
 
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI 3.14159265358979323846f
 #endif
 
 #ifndef M_TWO_PI
-#define M_TWO_PI 6.28318530717958647692 
+#define M_TWO_PI 6.28318530717958647692f
 #endif
 
 // -- internal constants --
@@ -14,11 +15,18 @@
 #define HIST_CENTER (HIST_SIZE / 2) // center index of histogram
 #define MIN_WALL_PTS 5 // minimum number of points to consider a wall valid
 
-// Helper
+// Helpers mathématiques
 static float normalize_angle(float angle) {
     while (angle < 0.0f) angle += M_TWO_PI;
     while (angle >= M_TWO_PI) angle -= M_TWO_PI;
     return angle;
+}
+
+static float angle_diff_rad(float target, float current) {
+    float diff = target - current;
+    while (diff < -M_PI) diff += M_TWO_PI;
+    while (diff > M_PI)  diff -= M_TWO_PI;
+    return diff;
 }
 
 static float find_grid_alignement_rad(const LD19DataPointHandler *scan) {
@@ -73,21 +81,28 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         return result;
     }
 
-    // step 1 : determine heading (orientation)
-    float grid_angle = find_grid_alignement_rad(scan);
-    float step = M_PI / 2.0f; // 90 degrees
-    float base_angle = roundf((prev_pose->theta + grid_angle) / step) * step;
-    float global_theta = normalize_angle(base_angle - grid_angle);
+    // step 1 : determine heading modulo 90 degrees
+    float align_angle_mod90 = find_grid_alignement_rad(scan);
+    
+    // --- LEVÉE D'AMBIGUÏTÉ (Unwrapping) ---
+    // On cherche le multiple de 90° qui correspond le mieux au cap estimé du robot
+    float best_diff = 1000.0f;
+    float global_theta = align_angle_mod90;
+    
+    // On teste les 4 orientations possibles de la table
+    for (int i = -2; i <= 2; i++) {
+        float test_theta = align_angle_mod90 + (i * M_PI / 2.0f);
+        float diff = fabsf(angle_diff_rad(prev_pose->theta, test_theta));
+        
+        if (diff < best_diff) {
+            best_diff = diff;
+            global_theta = normalize_angle(test_theta);
+        }
+    }
 
-    // --- SÉCURITÉ ANTI-SYMÉTRIE ---
-    // On vérifie l'écart entre le cap calculé et le cap estimé (odométrie)
-    float diff_angle = global_theta - prev_pose->theta;
-    while (diff_angle < -M_PI) diff_angle += M_TWO_PI;
-    while (diff_angle > M_PI) diff_angle -= M_TWO_PI;
-
-    // Si le Lidar propose un cap aberrant (ex: saut de 90° ou 180°), on rejette la mesure
-    if (fabsf(diff_angle) > (M_PI / 4.0f)) { 
-        return result; // result.valid est toujours false ici
+    // Si le Lidar propose un cap aberrant par rapport à l'odométrie (ex: robot emporté), on rejette
+    if (best_diff > (M_PI / 4.0f)) { 
+        return result;
     }
 
     // step 2 : rotate points to align with global frame
@@ -128,8 +143,6 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     }
 
     // step 4: find wall boundaries (outside-in search)
-    // we scan from the edges of the array, the first bin with enough points is the wall
-    // this effectively ignors noise inside the table area
     int left_idx = -1; 
     int right_idx = -1;
     int top_idx = -1;
@@ -170,7 +183,6 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     }
 
     // step 5: calculate measured room dimensions
-    // the "span" is the distance between walls in mm 
     float span_x = (right_idx - left_idx) * HIST_RES;
     float span_y = (top_idx - bottom_idx) * HIST_RES;
 
@@ -179,20 +191,35 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     float dist_to_bottom = (bottom_idx - HIST_CENTER) * HIST_RES;
 
     // step 6: compute robot position in global frame
-    //CASE A : we check if measured width matches defined wideth and measured length defined length
     if (fabsf(span_x - TABLE_SIZE_X) < LOC_TOLERANCE_MM &&
         fabsf(span_y - TABLE_SIZE_Y) < LOC_TOLERANCE_MM) {
-        // position is distance to left and bottom walls
-        result.x = -dist_to_left;
-        result.y = -dist_to_bottom;
-        result.theta = global_theta;
-        result.valid = true;
+        
+        float calculated_x = -dist_to_left;
+        float calculated_y = -dist_to_bottom;
+        
+        // --- FILTRAGE PAR DISTANCE (GATING) ---
+        // On calcule le saut de position par rapport à l'estimation précédente
+        float dx = calculated_x - prev_pose->x;
+        float dy = calculated_y - prev_pose->y;
+        float dist_jump = sqrtf(dx*dx + dy*dy);
+        
+        // Seuil de 300mm max. Si un robot masque le Lidar, la position trouvée 
+        // sera très éloignée de la réalité et on la rejette.
+        if (dist_jump <= 300.0f) {
+            result.x = calculated_x;
+            result.y = calculated_y;
+            result.theta = global_theta;
+            result.valid = true;
+        }
+        
         return result;
     }
-    // CASE B : rotated 90 degrees
+    // CASE B : rotated 90 degrees (on rejette explicitement pour éviter l'inversion X/Y)
     else if (fabsf(span_x - TABLE_SIZE_Y) < LOC_TOLERANCE_MM &&
              fabsf(span_y - TABLE_SIZE_X) < LOC_TOLERANCE_MM) {
-        // Rejeter la mesure pour éviter d'inverser (effet miroir) les coordonnées X/Y
         return result; 
     }
+
+    // Sécurité : toujours retourner result (qui est invalid par défaut ici)
+    return result;
 }
