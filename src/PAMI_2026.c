@@ -60,33 +60,43 @@ int main()
     Init_All();
 
     // --- Initialisation du Wi-Fi ---
-    if (cyw43_arch_init()) {
-        printf("Échec de l'initialisation du Wi-Fi\n");
-        return 1;
-    }
-    cyw43_arch_enable_sta_mode();
+    bool wifi_initialized = false;
+    bool wifi_connected = false;
 
-    printf("Connexion au Wi-Fi...\n");
-    // Remplace par ton SSID et Mot de passe
-    if (cyw43_arch_wifi_connect_timeout_ms("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK, 10000)) {
-        printf("Échec de la connexion Wi-Fi\n");
-        return 1;
+    if (cyw43_arch_init() == 0) {
+        wifi_initialized = true;
+        cyw43_arch_enable_sta_mode();
+        
+        printf("Connexion au Wi-Fi...\n");
+        // Remplace par ton SSID et Mot de passe
+        if (cyw43_arch_wifi_connect_timeout_ms("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+            printf("Échec de la connexion Wi-Fi. Le robot passe en mode STANDALONE.\n");
+            // SUPPRESSION DU return 1; ICI
+        } else {
+            printf("Wi-Fi connecté !\n");
+            wifi_connected = true;
+            // Afficher l'adresse IP
+            extern cyw43_t cyw43_state;
+            uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
+            printf("Adresse IP: %d.%d.%d.%d\n", 
+                ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+        }
     } else {
-        printf("Wi-Fi connecté !\n");
-        // Optionnel : afficher l'adresse IP pour savoir où se connecter
-        extern cyw43_t cyw43_state;
-        uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-        printf("Adresse IP: %d.%d.%d.%d\n", 
-            ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+        printf("Échec de l'initialisation de la puce Wi-Fi. Le robot passe en mode STANDALONE.\n");
+        // SUPPRESSION DU return 1; ICI
     }
 
     // --- Démarrage du serveur TCP ---
-    tcp_server_t *tcp_state = tcp_server_open();
-    if (!tcp_state) {
-        printf("Erreur lors de l'ouverture du serveur TCP\n");
-        // On peut continuer sans le Wi-Fi, mais on prévient
+    tcp_server_t *tcp_state = NULL;
+    if (wifi_connected) {
+        tcp_state = tcp_server_open();
+        if (!tcp_state) {
+            printf("Erreur lors de l'ouverture du serveur TCP\n");
+        } else {
+            printf("Serveur TCP prêt sur le port %d\n", TCP_SERVER_PORT);
+        }
     } else {
-        printf("Serveur TCP prêt sur le port %d\n", TCP_SERVER_PORT);
+        printf("Serveur TCP ignoré (pas de connexion Wi-Fi).\n");
     }
 
     //lecture de la pin de la laisse
@@ -252,10 +262,11 @@ int main()
                 sequencer++;
                 break;
             case 5:
-                // Ici tu peux ajouter d'autres tâches à faire régulièrement
-                // Par exemple, vérifier des capteurs, envoyer des données au serveur TCP, etc.
+                // On ne poll l'architecture que si la puce a bien démarré
+                if (wifi_initialized) {
+                    cyw43_arch_poll();
+                }
                 sequencer++;
-                cyw43_arch_poll();
                 break;
             default:
                 sequencer = 0;
