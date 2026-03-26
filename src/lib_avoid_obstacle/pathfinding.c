@@ -28,7 +28,8 @@ static void limit_magnitude(float* x, float* y, float max_val) {
     }
 }
 
-void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, float *rep_vy) {
+// Modifions la signature pour accepter l'angle de consigne (motion_angle_rad)
+void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, float *rep_vx, float *rep_vy) {
     *rep_vx = 0.0f;
     *rep_vy = 0.0f;
 
@@ -45,10 +46,10 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
     const float LATERAL_GAIN = 1.0f; 
 
     // 2. Paramètres du Bouclier Angles Morts (Survie)
-    const float SHIELD_MAX = 100.0f;  // S'active seulement très près !
-    const float FORCE_SHIELD = 400.0f; // Force de poussée latérale/arrière
+    const float SHIELD_MAX = 100.0f;  
+    const float FORCE_SHIELD = 400.0f; 
 
-    // Variables pour l'avant
+    // Variables pour l'avant dynamique
     float min_front_dist = D_MAX;
     float front_angle = 0.0f;
     bool front_found = false;
@@ -58,24 +59,33 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
     float blind_angle = 0.0f;
     bool blind_found = false;
 
+    // --- NOUVEAU : Conversion de l'angle de mouvement en degrés ---
+    float motion_angle_deg = motion_angle_rad * (180.0f / M_PI);
+
     // 1. RECHERCHE DES MENACES
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
         float angle_deg = scan->points[i].angle;
 
-        // On normalise l'angle entre -180° et +180°
         if (angle_deg > 180.0f) angle_deg -= 360.0f;
 
-        // --- SÉPARATION DES ZONES ---
-        if (angle_deg > -35.0f && angle_deg < 35.0f) {
-            // Zone Tactique : Cône avant
+        // --- NOUVEAU : Calcul de l'écart entre le point Lidar et la trajectoire ---
+        float diff_angle = angle_deg - motion_angle_deg;
+        // On normalise cet écart pour qu'il reste entre -180° et +180°
+        while (diff_angle > 180.0f) diff_angle -= 360.0f;
+        while (diff_angle < -180.0f) diff_angle += 360.0f;
+
+        // --- SÉPARATION DES ZONES DYNAMIQUE ---
+        // Le cône tactique "suit" désormais la direction vers laquelle le robot se déplace !
+        if (diff_angle > -35.0f && diff_angle < 35.0f) {
+            // Zone Tactique : Dans l'axe du mouvement
             if (d > 0.0f && d < min_front_dist) {
                 min_front_dist = d;
-                front_angle = scan->points[i].angle * (M_PI / 180.0f);
+                front_angle = scan->points[i].angle * (M_PI / 180.0f); // IMPORTANT: On garde l'angle VRAI pour la physique !
                 front_found = true;
             }
         } else {
-            // Zone de Survie : Angles morts (Tout le reste)
+            // Zone de Survie : Partout ailleurs
             if (d > 0.0f && d < min_blind_dist) {
                 min_blind_dist = d;
                 blind_angle = scan->points[i].angle * (M_PI / 180.0f);
@@ -112,7 +122,6 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
 
         float force_mag = FORCE_SHIELD * penetration;
 
-        // Pas de glissade latérale ici, on veut juste repousser le mur !
         float r_x = -cosf(blind_angle);
         float r_y = -sinf(blind_angle);
 
@@ -120,8 +129,6 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, fl
         sum_vy += force_mag * r_y;
     }
 
-    // On limite par sécurité
-    // On autorise un peu plus de vitesse globale si les deux forces s'additionnent
     limit_magnitude(&sum_vx, &sum_vy, FORCE_MAX * 1.2f);
 
     // =========================================================
@@ -152,30 +159,30 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
         return cmd;
     }
 
-    // Passage du vecteur d'attraction dans le repère local du robot
     float cos_theta = cosf(current_pose.theta);
     float sin_theta = sinf(current_pose.theta);
     float dx_local =  dx_global * cos_theta + dy_global * sin_theta;
     float dy_local = -dx_global * sin_theta + dy_global * cos_theta;
 
-    // Vecteur attraction (force qui tire vers la cible)
     float F_att_x = dx_local * PF_ATTRACTIVE_GAIN;
     float F_att_y = dy_local * PF_ATTRACTIVE_GAIN;
     limit_magnitude(&F_att_x, &F_att_y, PF_MAX_SPEED);
 
-    // Vecteur de répulsion (force qui repousse des murs)
+    // --- NOUVEAU : Quel est l'angle de notre vecteur d'attraction local ? ---
+    // atan2f(Y, X) nous donne la direction précise vers laquelle le robot VOUDRAIT aller.
+    float motion_angle_rad = atan2f(F_att_y, F_att_x);
+
     float F_rep_x = 0.0f;
     float F_rep_y = 0.0f;
-    Path_GetRepulsionVector(scan, &F_rep_x, &F_rep_y);
+    // On passe cet angle magique à notre fonction de détection
+    Path_GetRepulsionVector(scan, motion_angle_rad, &F_rep_x, &F_rep_y);
 
-    // L'APF : C'est la somme des deux forces !
     cmd.vx = F_att_x + F_rep_x;
     cmd.vy = F_att_y + F_rep_y;
     
-    // On peut appliquer une dernière limite globale pour protéger les moteurs
     limit_magnitude(&cmd.vx, &cmd.vy, PF_MAX_SPEED);
 
-    cmd.omega = 0.0f; // Asservissement angulaire géré ailleurs j'imagine
+    cmd.omega = 0.0f; 
 
     return cmd;
 }

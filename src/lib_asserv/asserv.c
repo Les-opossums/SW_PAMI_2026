@@ -189,10 +189,12 @@ void pos_asserv_step(void) {
 
     float cos_t = cosf(t);
     float sin_t = sinf(t);
+    
+    // Angle global vers la cible
     float angle = atan2f(rdy, rdx);
 
     // ==========================================
-    // 1. FORCE D'ATTRACTION (Ton code d'origine intact !)
+    // 1. FORCE D'ATTRACTION
     // ==========================================
     float speed_order_d = radial_speed_calculation(d); 
     
@@ -209,11 +211,12 @@ void pos_asserv_step(void) {
     float rep_vx_local = 0.0f;
     float rep_vy_local = 0.0f;
     
-    // 🔥 POUR TESTER : Si tu remplaces LD19.previousScan par NULL ici, 
-    // le robot DOIT bouger exactement comme avant.
-    // Path_GetRepulsionVector(NULL, &rep_vx_local, &rep_vy_local);
-    Path_GetRepulsionVector(LD19.previousScan, &rep_vx_local, &rep_vy_local);
+    // --- NOUVEAU : On calcule la direction locale désirée ---
+    // atan2f(Y local, X local) donne l'angle de notre glissade par rapport au nez du robot.
+    float motion_angle_rad = atan2f(att_vy_local, att_vx_local);
 
+    // On passe cet angle directionnel au Lidar pour qu'il oriente son "Cône Tactique" !
+    Path_GetRepulsionVector(LD19.previousScan, motion_angle_rad, &rep_vx_local, &rep_vy_local);
 
     // ==========================================
     // 3. FUSION APF
@@ -222,7 +225,6 @@ void pos_asserv_step(void) {
     speed_order.vy = att_vy_local + rep_vy_local;
     speed_order.vt = angular_speed_calculation(dt);
     
-
     // --- Stop condition globale
     if ((d < current_stop_distance) && (fabs(dt) < DEFAULT_STOP_ANGLE)) {
         motion_free();

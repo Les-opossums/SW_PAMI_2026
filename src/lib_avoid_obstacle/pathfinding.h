@@ -49,6 +49,5 @@ void Path_SetGoal(float x, float y);
  */
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan);
 
-void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float *rep_vx, float *rep_vy);
-
+void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, float *rep_vx, float *rep_vy);
 #endif // PATHFINDING_H
