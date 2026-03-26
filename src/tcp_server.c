@@ -111,17 +111,22 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
     cyw43_arch_lwip_check();
 
     if (p->tot_len > 0) {
+        // Limitation de sécurité pour éviter le Buffer Overflow
+        uint16_t len = p->tot_len;
+        if (len > sizeof(state->buffer_recv) - 1) {
+            len = sizeof(state->buffer_recv) - 1;
+        }
+
         // Copie les données reçues
-        pbuf_copy_partial(p, state->buffer_recv, sizeof(state->buffer_recv) - 1, 0);
-        state->buffer_recv[p->tot_len] = '\0';
+        pbuf_copy_partial(p, state->buffer_recv, len, 0);
+        state->buffer_recv[len] = '\0';
         
         // --- INJECTION DANS L'INTERPRÉTEUR ---
-        // On envoie chaque caractère reçu à la fonction Interp
-        for(uint16_t i = 0; i < p->tot_len; i++) {
+        for(uint16_t i = 0; i < len; i++) {
             Interp((int)state->buffer_recv[i]);
         }
 
-        tcp_recved(tpcb, p->tot_len);
+        tcp_recved(tpcb, p->tot_len); // On acquitte toujours la taille totale à lwIP
     }
 
     pbuf_free(p);
@@ -157,7 +162,11 @@ err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
         return ERR_VAL;
     }
 
-    // --- FIX : Tuer l'ancienne connexion fantôme s'il y en a une ---
+    // On informe lwIP que la connexion est gérée, sinon il refusera 
+    // systématiquement les futures connexions !
+    tcp_accepted(state->server_pcb);
+
+    // --- Tuer l'ancienne connexion fantôme s'il y en a une ---
     if (state->client_pcb != NULL) {
         printf("Un client est deja connecte. Fermeture de l'ancienne connexion.\n");
         tcp_abort(state->client_pcb); // On tue l'ancienne
@@ -166,6 +175,7 @@ err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
 
     printf("Client connected ACCEPTED. Setting is_connected = true\n");
     state->client_pcb = client_pcb;
+    // ... (le reste de ta fonction reste inchangé)
     state->is_connected = true;
     state->can_send = true;
 
@@ -185,40 +195,41 @@ tcp_server_t* tcp_server_open(void) {
 
     printf("Starting TCP server on port %u\n", TCP_SERVER_PORT);
 
-    // STEP 1: Create the PCB
-    printf("Attempting to create new PCB...\n");
+    cyw43_arch_lwip_begin(); 
+
     struct tcp_pcb *pcb = tcp_new_ip_type(IPADDR_TYPE_ANY);
     if (!pcb) {
         printf("--> FAILED: tcp_new_ip_type returned NULL. Out of PCBs!\n");
+        cyw43_arch_lwip_end();
         free(state);
         return NULL;
     }
-    printf("PCB created successfully.\n");
 
-    // STEP 2: Bind to the port
-    printf("Attempting to bind to port %u...\n", TCP_SERVER_PORT);
-    err_t err = tcp_bind(pcb, NULL, TCP_SERVER_PORT);
+    err_t err = tcp_bind(pcb, IP_ANY_TYPE, TCP_SERVER_PORT);
     if (err != ERR_OK) {
         printf("--> FAILED: tcp_bind returned error %d\n", err);
         tcp_close(pcb);
+        cyw43_arch_lwip_end();
         free(state);
         return NULL;
     }
-    printf("Bind successful.\n");
 
-    // STEP 3: Listen for connections
-    printf("Attempting to listen...\n");
     state->server_pcb = tcp_listen_with_backlog(pcb, 1);
     if (!state->server_pcb) {
         printf("--> FAILED: tcp_listen_with_backlog returned NULL\n");
         tcp_close(pcb);
+        cyw43_arch_lwip_end();
         free(state);
         return NULL;
     }
-    printf("Server is now listening.\n");
 
     tcp_arg(state->server_pcb, state);
     tcp_accept(state->server_pcb, tcp_server_accept);
+    
+    // --- Fin de la zone critique lwIP ---
+    cyw43_arch_lwip_end(); 
+    
+    printf("Server is now listening.\n");
     return state;
 }
 
