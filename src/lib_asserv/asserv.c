@@ -211,8 +211,8 @@ void pos_asserv_step(void) {
     
     // 🔥 POUR TESTER : Si tu remplaces LD19.previousScan par NULL ici, 
     // le robot DOIT bouger exactement comme avant.
-    Path_GetRepulsionVector(NULL, &rep_vx_local, &rep_vy_local);
-        // Path_GetRepulsionVector(LD19.previousScan, &rep_vx_local, &rep_vy_local);
+    // Path_GetRepulsionVector(NULL, &rep_vx_local, &rep_vy_local);
+    Path_GetRepulsionVector(LD19.previousScan, &rep_vx_local, &rep_vy_local);
 
 
     // ==========================================
