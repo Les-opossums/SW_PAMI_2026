@@ -79,8 +79,8 @@ void constrain_acceleration_order(float period) {
     // process wheel speed
     float vt_component = -(speed_order_constrained.vt * robot_wheel_distance);
     Speed_Order_1 = vt_component - speed_order_constrained.vy; 
-    Speed_Order_2 = vt_component + (speed_order_constrained.vx * (sqrtf(3.0f) / 2.0f)) + (speed_order_constrained.vy * 0.5f); 
-    Speed_Order_3 = vt_component - (speed_order_constrained.vx * (sqrtf(3.0f) / 2.0f)) + (speed_order_constrained.vy * 0.5f);
+    Speed_Order_2 = vt_component - (speed_order_constrained.vx * (sqrtf(3.0f) / 2.0f)) + (speed_order_constrained.vy * 0.5f); 
+    Speed_Order_3 = vt_component + (speed_order_constrained.vx * (sqrtf(3.0f) / 2.0f)) + (speed_order_constrained.vy * 0.5f);
 }
 
 

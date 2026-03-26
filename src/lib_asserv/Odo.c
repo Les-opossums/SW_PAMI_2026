@@ -50,7 +50,7 @@ void odo_position_step(int32_t pos1, int32_t pos2, int32_t pos3) {
     // --- NOUVELLES MATRICES DE KINEMATIQUE DIRECTE ---
     // Axe X = Translation Avant/Arrière
     // Axe Y = Translation Gauche/Droite
-    float dx = (sqrtf(3.0f) / 3.0f) * (delta_pos2 - delta_pos3); 
+    float dx = (sqrtf(3.0f) / 3.0f) * (delta_pos3 - delta_pos2); 
     float dy = (1.0f / 3.0f) * (-2.0f * delta_pos1 + delta_pos2 + delta_pos3);
     float dt = -(delta_pos1 + delta_pos2 + delta_pos3) / (3.0f * robot_wheel_distance);
 
