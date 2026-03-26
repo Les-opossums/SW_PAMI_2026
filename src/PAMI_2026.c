@@ -59,6 +59,36 @@ int main()
     Fusion_Init(0.0f, 0.0f, 0.0f); // init x y theta
     Init_All();
 
+    // --- Initialisation du Wi-Fi ---
+    if (cyw43_arch_init()) {
+        printf("Échec de l'initialisation du Wi-Fi\n");
+        return 1;
+    }
+    cyw43_arch_enable_sta_mode();
+
+    printf("Connexion au Wi-Fi...\n");
+    // Remplace par ton SSID et Mot de passe
+    if (cyw43_arch_wifi_connect_timeout_ms("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+        printf("Échec de la connexion Wi-Fi\n");
+        return 1;
+    } else {
+        printf("Wi-Fi connecté !\n");
+        // Optionnel : afficher l'adresse IP pour savoir où se connecter
+        extern cyw43_t cyw43_state;
+        uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
+        printf("Adresse IP: %d.%d.%d.%d\n", 
+            ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+    }
+
+    // --- Démarrage du serveur TCP ---
+    tcp_server_t *tcp_state = tcp_server_open();
+    if (!tcp_state) {
+        printf("Erreur lors de l'ouverture du serveur TCP\n");
+        // On peut continuer sans le Wi-Fi, mais on prévient
+    } else {
+        printf("Serveur TCP prêt sur le port %d\n", TCP_SERVER_PORT);
+    }
+
     //lecture de la pin de la laisse
     bool last_leash_state = gpio_get(LEASH_PIN);
     bool current_leash_state = last_leash_state;
@@ -220,6 +250,12 @@ int main()
                     script_match(); // Gère la logique de déplacement pendant le match
                 }
                 sequencer++;
+                break;
+            case 5:
+                // Ici tu peux ajouter d'autres tâches à faire régulièrement
+                // Par exemple, vérifier des capteurs, envoyer des données au serveur TCP, etc.
+                sequencer++;
+                cyw43_arch_poll();
                 break;
             default:
                 sequencer = 0;
