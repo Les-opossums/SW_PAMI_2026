@@ -123,6 +123,7 @@ uint8_t SETX_Cmd(void) {
     if (Get_Param_Float(&valf))
         return 1;
     set_position_x(valf);
+    Fusion_Init(valf, get_position().y, get_position().t); // On réinitialise la fusion avec la nouvelle position pour éviter les incohérences
     return 0;
 }
 
@@ -133,6 +134,7 @@ uint8_t SETY_Cmd(void) {
     if (Get_Param_Float(&valf))
         return 1;
     set_position_y(valf);
+    Fusion_Init(get_position().x, valf, get_position().t); // On réinitialise la fusion avec la nouvelle position pour éviter les incohérences
     return 0;
 }
 
@@ -142,6 +144,7 @@ uint8_t SETT_Cmd(void) {
     if (Get_Param_Float(&valf))
         return 1;
     set_position_t(valf);
+    Fusion_Init(get_position().x, get_position().y, valf); // On réinitialise la fusion avec la nouvelle orientation pour éviter les incohérences
     return 0;
 }
 
