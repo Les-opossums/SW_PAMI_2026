@@ -160,6 +160,14 @@ int main()
             last_au_state = current_au_state;
         }
 
+        if (!current_au_state){
+            // disable motors
+            motion_free();
+            for (int i = 0; i < 3; i++) {
+                gpio_put(11, 1); // Disable power to stepper drivers
+            }
+        }
+
         // --- A. Screen Update ---
         // On met à jour l'animation à chaque tour de boucle
         // minion_eye_update_non_blocking();
@@ -342,52 +350,41 @@ void script_match(void) {
     switch (match_state) {
         case 0:
             if (start_match) {
-                timer_match = Timer_ms1;
-                match_state++;
+                match_state++; // Go !
             }
             break;
-        case 1:
-            if ((Timer_ms1 - timer_match) > timer_match_delay && (Timer_ms1 - timer_match) < timer_match_delay_endgame) {
-                // Actions du début de match (ex: se déplacer à un endroit stratégique)
-                Goal_Pos.x = 0.6;
-                Goal_Pos.y = 0.0;
-                Goal_Pos.t = 0.0;
-                motion_pos(Goal_Pos);
-                timer_match = Timer_ms1; // reset timer for next phase
-                match_state++;
-            }
+
+        case 1: // ACTION : Lancement du premier mouvement
+            Goal_Pos.x = 0.5;
+            Goal_Pos.y = 1.0;
+            Goal_Pos.t = 1.5708; // 90 degrés en radians
+            motion_pos(Goal_Pos);
+            match_state++; // On passe tout de suite à l'état d'attente
             break;
-        case 2:
-                if ((Timer_ms1 - timer_match) > 5000) {
-                    timer_match = Timer_ms1; // reset timer for next phase
-                    match_state++;
-                }
-                break;
-        case 3:
+            
+        case 2: // ATTENTE : On boucle ici tant que le robot roule
             if (motion_done == 1) {
-                Goal_Pos.x = 0.6;
-                Goal_Pos.y = 0.0;
-                Goal_Pos.t = 3.14159; // 180 degrees in radians
-                motion_pos(Goal_Pos);
-                match_state++;
+                match_state++; // On passe au mouvement suivant
             }
             break;
-        case 4:
-            if ((Timer_ms1 - timer_match) > 5000) {
-                timer_match = Timer_ms1; // reset timer for next phase
-                match_state++;
-            }
+
+        // --- MOUVEMENT 2 ---
+        case 3: // ACTION : Demi-tour
+            Goal_Pos.x = 0.5;
+            Goal_Pos.y = 0.2;
+            Goal_Pos.t = 1.5708;
+            motion_pos(Goal_Pos);
+            match_state++;
             break;
-        case 5:
+
+        case 4: // ATTENTE
             if (motion_done == 1) {
-                Goal_Pos.x = 0.0;
-                Goal_Pos.y = 0.0;
-                Goal_Pos.t = 3.14159; // 180 degrees in radians
-                motion_pos(Goal_Pos);
-                match_state++;
+                match_state = 1;
             }
             break;
+
         default:
+            // Match terminé ou attente de la fin des 90 secondes
             break;
     }
 }

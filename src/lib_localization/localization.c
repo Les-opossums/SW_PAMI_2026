@@ -45,28 +45,40 @@ static float angle_diff_rad(float target, float current) {
     return diff;
 }
 
-static float find_grid_alignement_rad(const LD19DataPointHandler *scan) {
+static float find_angular_error(const LD19DataPointHandler *scan, float expected_theta) {
     int bins[90] = {0}; // histogram for angles for 0 to 90 degrees
-    int step = 4; // step between points to consider to get a stable vector
-
     float rad_to_bin = 90.0f / (M_PI / 2.0f); // 90 bins for 90 degrees
 
-    for (int i = 0; i < scan->index - step; i++){
+    for (int i = 0; i < scan->index; i++){
         // ignore invalid or out of range points
         if(scan->points[i].distance < 100 || scan->points[i].distance > 3000) continue;
 
-        // compute vector between points
-        float dx = scan->points[i + step].x - scan->points[i].x;
-        float dy = scan->points[i + step].y - scan->points[i].y;
-        float d2 = dx*dx + dy*dy;
- 
-        // if distance squared is less than 10m, consider it for histogram (same object)
-        if(d2 < 10000.0f){
-            // atan2 gives direction of the wall
-            float angle = atan2f(dy, dx);
-            float norm = normalize_angle(angle);
+        int j = i+1;
+        float dx, dy, d2;
+        bool found = false;
 
-            // map the angle to a bin index
+        while(j < scan->index) {
+            dx = scan->points[j].x - scan->points[i].x;
+            dy = -(scan->points[j].y - scan->points[i].y); // inversion Y
+            d2 = dx*dx + dy*dy;
+
+            if(d2 > 22500.0f){ 
+                if(d2 < 90000.0f){ // if distance squared is between 15cm and 30cm, stop looking for neighbors (different object)
+                    found = true;
+                }
+                break;
+            }
+            j++;
+        }
+ 
+        if(found){
+            float angle_lidar = atan2f(dy, dx);
+            float angle_global_mesure = angle_lidar + expected_theta;
+
+            float norm = angle_global_mesure;
+            while (norm < 0.0f) norm += (M_PI / 2.0f);
+            while (norm >= (M_PI / 2.0f)) norm -= (M_PI / 2.0f);
+
             int bin_idx = (int)(norm * rad_to_bin) % 90;
             bins[bin_idx]++;
         }
@@ -83,9 +95,16 @@ static float find_grid_alignement_rad(const LD19DataPointHandler *scan) {
             max_idx = i;
         }
     }
-    // convert the winning bin index back to radians
-    float best_angle = ((float)max_idx) / rad_to_bin;
-    return best_angle;
+
+    if(max_val < 5) return 0.0f; // if not enough points, return no correction
+
+    float dominant_angle_mod = ((float)max_idx) / rad_to_bin; // convert bin index back to angle
+
+    float angular_error = dominant_angle_mod;
+    if (angular_error > M_PI / 4.0f) {
+        angular_error -= M_PI / 2.0f; // adjust to range [-45°, +45°]
+    }
+    return angular_error; 
 }
 
 RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose) {
@@ -97,23 +116,24 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         return result;
     }
 
-    // step 1 : determine heading (orientation)
-    float global_theta = prev_pose->theta;
+    // step 1 : find and correct angular error using dominant angle of scan points
+    float angular_error = find_angular_error(scan, prev_pose->theta);
 
+    float global_theta = normalize_angle(prev_pose->theta - angular_error);
+
+    // step 2 : precompute cos and sin for rotation
     float cos_theta = cosf(global_theta);
     float sin_theta = sinf(global_theta);
 
-    // step 3 : build histograms for X and Y positions
     uint16_t x_hist[HIST_SIZE] = {0};
     uint16_t y_hist[HIST_SIZE] = {0};
 
+    // step 3 : build histograms for X and Y positions
     for (int i = 0; i < scan->index; i++) {
         if(scan->points[i].distance < 50 || scan->points[i].distance > 3500) continue;
 
         float lidar_x = scan->points[i].x;
-        // --- INVERSION Y ICI ---
-        // Le Lidar a la tête en bas (Roll 180°), donc la gauche devient la droite !
-        float lidar_y = -scan->points[i].y; 
+        float lidar_y = -scan->points[i].y; // inversion Y car le lidar à la tête en bas
 
         // Rotation pour aligner les murs avec la table
         float x_rot = lidar_x * cos_theta - lidar_y * sin_theta;
@@ -197,7 +217,7 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     }
 
     // Si on ne voit vraiment rien (gros blocage), on rejette proprement
-    if (!x_updated && !y_updated) {
+    if (!x_updated && !y_updated && fabsf(angular_error) < 0.01f) {
         return result;
     }
 
@@ -217,6 +237,5 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         result.valid = true;
     }
 
-    return result;
     return result;
 }

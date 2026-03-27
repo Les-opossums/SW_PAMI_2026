@@ -78,6 +78,7 @@ void motion_free(void) {
 void motion_pos(Position pos) {
     current_stop_distance = default_stop_distance;
     Wanted_Pos = pos;
+    motion_done = 0;
     emergency_break_requested = 0;
     asserv_mode = ASSERV_MODE_POS;
 }
@@ -216,7 +217,7 @@ void pos_asserv_step(void) {
     float motion_angle_rad = atan2f(att_vy_local, att_vx_local);
 
     // On passe cet angle directionnel au Lidar pour qu'il oriente son "Cône Tactique" !
-    Path_GetRepulsionVector(LD19.previousScan, motion_angle_rad, &rep_vx_local, &rep_vy_local);
+    Path_GetRepulsionVector(NULL, motion_angle_rad, &rep_vx_local, &rep_vy_local);
 
     // ==========================================
     // 3. FUSION APF
@@ -227,6 +228,7 @@ void pos_asserv_step(void) {
     
     // --- Stop condition globale
     if ((d < current_stop_distance) && (fabs(dt) < DEFAULT_STOP_ANGLE)) {
+        motion_done = 1;
         motion_free();
         printf("Pos,done\n");
     }
