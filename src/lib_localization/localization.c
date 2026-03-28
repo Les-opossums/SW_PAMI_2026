@@ -231,8 +231,7 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         result.x = calculated_x;
         result.y = calculated_y;
         
-        // On renvoie l'angle de l'odométrie (erreur d_theta = 0)
-        result.theta = prev_pose->theta; 
+        result.theta = global_theta; 
         
         result.valid = true;
     }
