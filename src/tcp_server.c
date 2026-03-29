@@ -80,7 +80,7 @@ err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len)
     // I've removed it for simplicity, but your original way also works.
     
     cyw43_arch_lwip_begin();
-    err_t err = tcp_write(state->client_pcb, data, len, TCP_WRITE_FLAG_COPY);
+    err_t err = tcp_write(state->client_pcb, data, len, 0);
     
     if (err == ERR_OK) {
         // --- FIX: Immediately prevent further sends until this one is acknowledged ---

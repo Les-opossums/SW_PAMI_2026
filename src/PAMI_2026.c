@@ -24,6 +24,78 @@ int last_robot_data_update_time = 0;
 
 int start_match = 0; // Set to 1 when the match starts (e.g., when the leash is activated)
 
+// ==========================================
+// --- Lidar TCP ---
+// ==========================================
+// Variable globale pour activer/désactiver l'envoi depuis l'interpréteur ou le code
+volatile uint8_t enable_tcp_telemetry = 1; 
+
+// On force l'alignement à 1 octet pour éviter le padding dans la trame réseau
+#pragma pack(push, 1)
+typedef struct {
+    uint8_t magic[2];     // 0xAA, 0xBB (Header de synchronisation)
+    float robot_x;        // Position X calculée (mm ou m)
+    float robot_y;        // Position Y calculée (mm ou m)
+    float robot_theta;    // Angle Theta (rad)
+    uint16_t num_points;  // Nombre de points Lidar dans cette trame
+} tcp_lidar_frame_header_t;
+#pragma pack(pop)
+
+
+void send_lidar_telemetry(tcp_server_t *tcp_state) {
+    // 1. Vérifications préalables
+    if (!enable_tcp_telemetry || !tcp_state || !tcp_state->is_connected || !tcp_state->can_send) {
+        return; 
+    }
+
+    // 2. On vérifie si le Lidar a complété un nouveau scan
+    if (LD19_isNewScan(&LD19)) {
+        uint16_t num_points = LD19.previousScan->index;
+        
+        // Taille totale : Header + (2 floats par point * 4 octets)
+        size_t points_size = num_points * 2 * sizeof(float);
+        size_t total_size = sizeof(tcp_lidar_frame_header_t) + points_size;
+
+        // 3. Vérifier si le buffer lwIP a assez de place (évite un fail d'envoi)
+        if (tcp_sndbuf(tcp_state->client_pcb) < total_size) {
+            // Buffer trop plein (le client PC ne lit pas assez vite), on skip ce tour
+            return;
+        }
+
+        // 4. Préparer le buffer d'envoi
+        // On utilise 'static' pour ne pas exploser la RAM de la Stack du RP2040
+        static uint8_t tx_buffer[4096]; 
+        if (total_size > sizeof(tx_buffer)) return; // Sécurité anti-débordement
+
+        // Remplir le header
+        tcp_lidar_frame_header_t *header = (tcp_lidar_frame_header_t *)tx_buffer;
+        header->magic[0] = 0xAA;
+        header->magic[1] = 0xBB;
+        
+        // --- CHOIX DE LA POSITION ---
+        // Ici on prend l'odométrie, mais si tu as la position globale via ta fonction 
+        // Fusion (dans fusion.c), remplace par les variables de ton filtre de fusion.
+        header->robot_x = position_robot.x; 
+        header->robot_y = position_robot.y;
+        header->robot_theta = position_robot.t;
+        header->num_points = num_points;
+
+        // Remplir les points (x, y)
+        // Les coordonnées des points LD19 sont mappées juste après le header
+        float *points_data = (float *)(tx_buffer + sizeof(tcp_lidar_frame_header_t));
+        for (uint16_t i = 0; i < num_points; i++) {
+            points_data[2*i]     = LD19.previousScan->points[i].x;
+            points_data[2*i + 1] = LD19.previousScan->points[i].y;
+        }
+
+        // 5. Envoi des données via ta fonction
+        tcp_server_send_data(tcp_state, tx_buffer, total_size);
+
+        // 6. Acquitter le scan pour ne pas le renvoyer en boucle
+        LD19.newScan = 0;
+    }
+}
+
 // --- Helper: Ease-Out Interpolation ---
 // Makes movement look organic (fast start, slow stop)
 float ease_out_cubic(float t) {
@@ -166,6 +238,15 @@ int main()
             for (int i = 0; i < 3; i++) {
                 gpio_put(11, 1); // Disable power to stepper drivers
             }
+        }
+
+
+        if (wifi_connected && tcp_state != NULL) {
+            // Appelle la routine TCP lwIP cyclique
+            cyw43_arch_poll();
+            
+            // Tente d'envoyer la télémétrie Lidar
+            send_lidar_telemetry(tcp_state);
         }
 
         // --- A. Screen Update ---
@@ -388,3 +469,4 @@ void script_match(void) {
             break;
     }
 }
+
