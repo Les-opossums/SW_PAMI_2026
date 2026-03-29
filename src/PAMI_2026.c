@@ -42,58 +42,47 @@ typedef struct {
 #pragma pack(pop)
 
 
-void send_lidar_telemetry(tcp_server_t *tcp_state) {
+void send_lidar_telemetry(tcp_server_t *tcp_state, float rx, float ry, float rtheta) {
     // 1. Vérifications préalables
     if (!enable_tcp_telemetry || !tcp_state || !tcp_state->is_connected || !tcp_state->can_send) {
         return; 
     }
 
-    // 2. On vérifie si le Lidar a complété un nouveau scan
-    if (LD19_isNewScan(&LD19)) {
-        uint16_t num_points = LD19.previousScan->index;
-        
-        // Taille totale : Header + (2 floats par point * 4 octets)
-        size_t points_size = num_points * 2 * sizeof(float);
-        size_t total_size = sizeof(tcp_lidar_frame_header_t) + points_size;
+    uint16_t num_points = LD19.previousScan->index;
+    
+    // Taille totale : Header + (2 floats par point * 4 octets)
+    size_t points_size = num_points * 2 * sizeof(float);
+    size_t total_size = sizeof(tcp_lidar_frame_header_t) + points_size;
 
-        // 3. Vérifier si le buffer lwIP a assez de place (évite un fail d'envoi)
-        if (tcp_sndbuf(tcp_state->client_pcb) < total_size) {
-            // Buffer trop plein (le client PC ne lit pas assez vite), on skip ce tour
-            return;
-        }
-
-        // 4. Préparer le buffer d'envoi
-        // On utilise 'static' pour ne pas exploser la RAM de la Stack du RP2040
-        static uint8_t tx_buffer[4096]; 
-        if (total_size > sizeof(tx_buffer)) return; // Sécurité anti-débordement
-
-        // Remplir le header
-        tcp_lidar_frame_header_t *header = (tcp_lidar_frame_header_t *)tx_buffer;
-        header->magic[0] = 0xAA;
-        header->magic[1] = 0xBB;
-        
-        // --- CHOIX DE LA POSITION ---
-        // Ici on prend l'odométrie, mais si tu as la position globale via ta fonction 
-        // Fusion (dans fusion.c), remplace par les variables de ton filtre de fusion.
-        header->robot_x = position_robot.x; 
-        header->robot_y = position_robot.y;
-        header->robot_theta = position_robot.t;
-        header->num_points = num_points;
-
-        // Remplir les points (x, y)
-        // Les coordonnées des points LD19 sont mappées juste après le header
-        float *points_data = (float *)(tx_buffer + sizeof(tcp_lidar_frame_header_t));
-        for (uint16_t i = 0; i < num_points; i++) {
-            points_data[2*i]     = LD19.previousScan->points[i].x;
-            points_data[2*i + 1] = LD19.previousScan->points[i].y;
-        }
-
-        // 5. Envoi des données via ta fonction
-        tcp_server_send_data(tcp_state, tx_buffer, total_size);
-
-        // 6. Acquitter le scan pour ne pas le renvoyer en boucle
-        LD19.newScan = 0;
+    // 2. Vérifier si le buffer lwIP a assez de place
+    if (tcp_sndbuf(tcp_state->client_pcb) < total_size) {
+        return;
     }
+
+    // 3. Préparer le buffer d'envoi
+    static uint8_t tx_buffer[4096]; 
+    if (total_size > sizeof(tx_buffer)) return;
+
+    // Remplir le header
+    tcp_lidar_frame_header_t *header = (tcp_lidar_frame_header_t *)tx_buffer;
+    header->magic[0] = 0xAA;
+    header->magic[1] = 0xBB;
+    
+    // --- POSITION EXCLUSIVE DU LIDAR ---
+    header->robot_x = rx; 
+    header->robot_y = ry;
+    header->robot_theta = rtheta;
+    header->num_points = num_points;
+
+    // Remplir les points (x, y)
+    float *points_data = (float *)(tx_buffer + sizeof(tcp_lidar_frame_header_t));
+    for (uint16_t i = 0; i < num_points; i++) {
+        points_data[2*i]     = LD19.previousScan->points[i].x;
+        points_data[2*i + 1] = LD19.previousScan->points[i].y;
+    }
+
+    // 4. Envoi des données
+    tcp_server_send_data(tcp_state, tx_buffer, total_size);
 }
 
 // --- Helper: Ease-Out Interpolation ---
@@ -244,9 +233,6 @@ int main()
         if (wifi_connected && tcp_state != NULL) {
             // Appelle la routine TCP lwIP cyclique
             cyw43_arch_poll();
-            
-            // Tente d'envoyer la télémétrie Lidar
-            send_lidar_telemetry(tcp_state);
         }
 
         // --- A. Screen Update ---
@@ -286,32 +272,35 @@ int main()
                 break;
             case 2:
                 static RobotPose snapshot_pose; // La "photo" de l'odométrie
+                static RobotPose last_lidar_pose = {0.0f, 0.0f, 0.0f, true}; // Mémorise la dernière pos Lidar
 
                 if(LD19.newScan){
-                    LD19.newScan = 0;
-                    // 1. On prend une photo de la position EXACTE à la fin du scan Lidar
+                    LD19.newScan = 0; // On acquitte le scan ici, une seule fois !
                     snapshot_pose = Fusion_GetState(); 
                     has_data = true;
                 }
 
                 if(has_data){
-                    // 2. On aide la localisation avec notre photo (en mm)
                     RobotPose belief_for_loc = snapshot_pose;
                     belief_for_loc.x *= 1000.0f;
                     belief_for_loc.y *= 1000.0f;
 
                     // --- CALCUL LONG (~100ms) ---
-                    // Pendant ce temps, l'asservissement continue de faire avancer le robot
                     RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
                     
                     if (measured.valid && lidar_loc_en){
                         printf("LIDAR LOC: x=%.1f y=%.1f t=%.2f\n", measured.x, measured.y, measured.theta);
 
+                        // ---> SAUVEGARDE POUR LE DEBUG PYTHON (En millimètres) <---
+                        last_lidar_pose.x = measured.x;
+                        last_lidar_pose.y = measured.y;
+                        last_lidar_pose.theta = measured.theta;
+
+                        // Conversion en mètres pour la fusion
                         measured.x /= 1000.0f;
                         measured.y /= 1000.0f;
                         
                         // 3. CALCUL DE L'ERREUR DANS LE PASSÉ
-                        // Quelle est la vraie erreur constatée par le Lidar à l'instant t-100ms ?
                         float err_x = measured.x - snapshot_pose.x;
                         float err_y = measured.y - snapshot_pose.y;
                         
@@ -320,19 +309,20 @@ int main()
                         while (err_t >  M_PI) err_t -= M_TWO_PI;
 
                         // 4. PROJECTION DANS LE PRÉSENT
-                        // On récupère la position actuelle (qui a avancé)
                         RobotPose actual_now = Fusion_GetState();
-                        
-                        // On crée une mesure "virtuelle" : ce que le Lidar mesurerait MAINTENANT
                         RobotPose projected_lidar = measured;
                         projected_lidar.x = actual_now.x + err_x;
                         projected_lidar.y = actual_now.y + err_y;
                         projected_lidar.theta = actual_now.theta + err_t;
 
-                        // 5. APPEL DE TA FONCTION
-                        // Ta fonction va calculer la diff entre projected_lidar et state (donc retomber sur nos err_x/err_y)
-                        // et appliquer tes FUSION_GAIN et tes sécurités MAX_FUSION_JUMP !
+                        // 5. APPEL DE TA FONCTION DE FUSION
                         Fusion_Correct(projected_lidar);
+                    }
+
+                    // ---> ENVOI TCP SYNCHRONISÉ <---
+                    // On envoie la télémétrie pile au moment où l'on vient de traiter le scan !
+                    if (wifi_connected && tcp_state != NULL) {
+                        send_lidar_telemetry(tcp_state, last_lidar_pose.x, last_lidar_pose.y, last_lidar_pose.theta);
                     }
                 }
                 sequencer++;
