@@ -15,9 +15,9 @@
 int lidar_loc_en = 1; // 0 = off, 1 = on (use lidar for localization correction)
 
 // Pin configuration
-// #define LCD_CS_PIN 17
-// #define LCD_DC_PIN 16
-// #define LCD_RST_PIN 15 // Use -1 if you skip the reset pin
+#define LCD_CS_PIN 21
+#define LCD_DC_PIN 20
+#define LCD_RST_PIN 22 // Use -1 if you skip the reset pin
 
 int freq_robot_data_update = 20; // Hz
 int last_robot_data_update_time = 0;
@@ -116,10 +116,10 @@ int main()
     sleep_ms(2000); // wait for stdio to be ready
 
     // 2. Initialize Screen (Feature/Screen)
-    // gc9a01a_t tft;
-    // gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
-    // gc9a01a_begin(&tft); // Uses default SPI_DEFAULT_FREQ (40MHz)
-    // minion_eye_init(&tft);
+    gc9a01a_t tft;
+    gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
+    gc9a01a_begin(&tft); // Uses default SPI_DEFAULT_FREQ (40MHz)
+    minion_eye_init(&tft);
 
     // 3. Initialize Robot Logic (HEAD)
     int sequencer = 0;
@@ -169,6 +169,7 @@ int main()
     bool current_leash_state = last_leash_state;
 
     bool last_au_state = gpio_get(AU_PIN);
+    gpio_pull_up(AU_PIN);
     bool current_au_state = last_au_state;
     bool au_state = current_au_state; // 0 = normal mode, 1 = AU mode (no asserv, no LED update)
 
@@ -237,7 +238,7 @@ int main()
 
         // --- A. Screen Update ---
         // On met à jour l'animation à chaque tour de boucle
-        // minion_eye_update_non_blocking();
+        minion_eye_update_non_blocking();
         // --- B. Robot Logic ---
         bool has_data = false;
         Timer_Update(); // Met à jour les timers

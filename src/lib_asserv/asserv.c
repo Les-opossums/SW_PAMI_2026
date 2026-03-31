@@ -217,7 +217,7 @@ void pos_asserv_step(void) {
     float motion_angle_rad = atan2f(att_vy_local, att_vx_local);
 
     // On passe cet angle directionnel au Lidar pour qu'il oriente son "Cône Tactique" !
-    Path_GetRepulsionVector(NULL, motion_angle_rad, &rep_vx_local, &rep_vy_local);
+    Path_GetRepulsionVector(LD19.previousScan, motion_angle_rad, &rep_vx_local, &rep_vy_local);
 
     // ==========================================
     // 3. FUSION APF
