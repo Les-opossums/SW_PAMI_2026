@@ -290,7 +290,7 @@ int main()
                     RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
                     
                     if (measured.valid && lidar_loc_en){
-                        printf("LIDAR LOC: x=%.1f y=%.1f t=%.2f\n", measured.x, measured.y, measured.theta);
+                        // printf("LIDAR LOC: x=%.1f y=%.1f t=%.2f\n", measured.x, measured.y, measured.theta);
 
                         // ---> SAUVEGARDE POUR LE DEBUG PYTHON (En millimètres) <---
                         last_lidar_pose.x = measured.x;
@@ -317,7 +317,7 @@ int main()
                         projected_lidar.theta = actual_now.theta + err_t;
 
                         // 5. APPEL DE TA FONCTION DE FUSION
-                        Fusion_Correct(projected_lidar);
+                        // Fusion_Correct(projected_lidar);
                     }
 
                     // ---> ENVOI TCP SYNCHRONISÉ <---
