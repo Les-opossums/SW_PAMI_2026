@@ -5,6 +5,8 @@
 #include "pico/multicore.h"
 #include "pico/sync.h"
 
+#include "mbedtls/sha1.h"
+#include "mbedtls/base64.h"
 
 #include <stdint.h>
 #include <string.h>

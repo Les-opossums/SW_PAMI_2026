@@ -2,12 +2,13 @@
 
 tcp_server_t *tcp_server_init(void) {
     tcp_server_t *state = calloc(1, sizeof(tcp_server_t));
-    state->can_send = false;
-    state->is_connected = false;
     if (!state) {
         DEBUG_printf("Failed to allocate tcp_server_t\n");
         return NULL;
     }
+    state->can_send = false;
+    state->is_connected = false;
+    state->is_websocket_ready = false; // Initialisation
     return state;
 }
 
@@ -23,8 +24,11 @@ err_t tcp_server_close(void *arg) {
         tcp_sent(state->client_pcb, NULL);
         tcp_recv(state->client_pcb, NULL);
         tcp_err(state->client_pcb, NULL);
+        
         state->can_send = false;
         state->is_connected = false;
+        state->is_websocket_ready = false; // Reset
+        
         err = tcp_close(state->client_pcb);
         if (err != ERR_OK) {
             printf("TCP close failed (%d), aborting\n", err);
@@ -55,10 +59,9 @@ err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len)
         return ERR_VAL;
     }
 
-    // --- FIX: Check if we are allowed to send data ---
+    // --- Vérifie si on a le droit d'envoyer ---
     if (!state->can_send) {
         printf("[Sender] Cannot send now, waiting for previous send to complete.\n");
-        // Return a non-fatal error; we can try again later.
         return ERR_INPROGRESS; 
     }
 
@@ -67,24 +70,18 @@ err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len)
         return ERR_VAL;
     }
     
-    // Check if the send buffer has enough space.
-    // This is a more robust check than just a flag.
+    // Vérifier si le buffer lwIP a assez de place
     if (tcp_sndbuf(state->client_pcb) < len) {
         printf("[Sender] Not enough space in send buffer. Available: %u, Required: %zu\n",
                tcp_sndbuf(state->client_pcb), len);
         return ERR_MEM;
     }
 
-    // The memcpy to state->buffer_sent is not necessary because you are using
-    // TCP_WRITE_FLAG_COPY, which tells lwIP to make its own copy.
-    // I've removed it for simplicity, but your original way also works.
-    
     cyw43_arch_lwip_begin();
-    err_t err = tcp_write(state->client_pcb, data, len, 0);
+    err_t err = tcp_write(state->client_pcb, data, len, 0); // On met 0 car on gère notre propre mémoire static
     
     if (err == ERR_OK) {
-        // --- FIX: Immediately prevent further sends until this one is acknowledged ---
-        state->can_send = false;
+        state->can_send = false; // Bloque les prochains envois jusqu'à l'ACK
         err = tcp_output(state->client_pcb);
     }
     cyw43_arch_lwip_end();
@@ -100,9 +97,10 @@ err_t tcp_server_send_data(tcp_server_t *state, const uint8_t *data, size_t len)
 err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     tcp_server_t *state = (tcp_server_t *)arg;
 
-    if (!p) { // Connection closed
+    if (!p) { // Connexion fermée par le client
         printf("Client disconnected.\n");
         state->is_connected = false;
+        state->is_websocket_ready = false; // Reset au débranchement
         state->client_pcb = NULL;
         tcp_close(tpcb);
         return ERR_OK;
@@ -117,13 +115,68 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
             len = sizeof(state->buffer_recv) - 1;
         }
 
-        // Copie les données reçues
+        // Copie des données reçues dans le buffer local
         pbuf_copy_partial(p, state->buffer_recv, len, 0);
         state->buffer_recv[len] = '\0';
         
-        // --- INJECTION DANS L'INTERPRÉTEUR ---
-        for(uint16_t i = 0; i < len; i++) {
-            Interp((int)state->buffer_recv[i]);
+        // --- ÉTAPE 1 : POIGNÉE DE MAIN HTTP (HANDSHAKE WEBSOCKET) ---
+        if (!state->is_websocket_ready) {
+            // On cherche la clé envoyée par le navigateur
+            char *key_start = strstr((char*)state->buffer_recv, "Sec-WebSocket-Key: ");
+            if (key_start) {
+                key_start += 19; // On avance jusqu'à la valeur de la clé
+                char *key_end = strchr(key_start, '\r');
+                if (key_end) {
+                    *key_end = '\0'; // On isole la clé
+                    
+                    // On concatène avec le "Magic String" officiel de la RFC 6455
+                    char concat_key[100];
+                    snprintf(concat_key, sizeof(concat_key), "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", key_start);
+
+                    // Hachage SHA-1 avec mbedtls
+                    unsigned char sha1_sum[20];
+                    mbedtls_sha1((unsigned char*)concat_key, strlen(concat_key), sha1_sum);
+                    // Encodage Base64 avec mbedtls
+                    char base64_key[64];
+                    size_t base64_len;
+                    mbedtls_base64_encode((unsigned char*)base64_key, sizeof(base64_key), &base64_len, sha1_sum, 20);
+
+                    // Création de la réponse HTTP 101 pour valider le WebSocket
+                    char response[256];
+                    snprintf(response, sizeof(response),
+                        "HTTP/1.1 101 Switching Protocols\r\n"
+                        "Upgrade: websocket\r\n"
+                        "Connection: Upgrade\r\n"
+                        "Sec-WebSocket-Accept: %s\r\n\r\n", base64_key);
+
+                    // Envoi immédiat de la réponse HTTP
+                    tcp_write(tpcb, response, strlen(response), TCP_WRITE_FLAG_COPY);
+                    tcp_output(tpcb);
+                    
+                    state->is_websocket_ready = true;
+                    printf("WebSocket Handshake OK !\n");
+                }
+            }
+        } 
+        // --- ÉTAPE 2 : PARSING DES COMMANDES WEBSOCKET ---
+        else {
+            WebsocketPacketHeader_t ws_header;
+            if (WS_ParsePacket(&ws_header, (char*)state->buffer_recv, len) == 0) {
+                
+                // Si c'est une trame texte (OPCODE 1) on l'envoie à l'interpréteur
+                if (ws_header.meta.bits.OPCODE == WEBSOCKET_OPCODE_TEXT) {
+                    char *payload = (char*)state->buffer_recv + ws_header.start;
+                    
+                    for(uint16_t i = 0; i < ws_header.length; i++) {
+                        Interp((int)payload[i]);
+                    }
+                }
+                // Si la trame est une demande de déconnexion (OPCODE 8)
+                else if (ws_header.meta.bits.OPCODE == WEBSOCKET_OPCODE_CLOSE) {
+                    printf("WebSocket Client requested closure.\n");
+                    // On ferme au prochain tick
+                }
+            }
         }
 
         tcp_recved(tpcb, p->tot_len); // On acquitte toujours la taille totale à lwIP
@@ -149,6 +202,7 @@ void tcp_server_err(void *arg, err_t err) {
     if (state != NULL) {
         state->client_pcb = NULL;
         state->is_connected = false;
+        state->is_websocket_ready = false;
         state->can_send = false;
     }
 }
@@ -174,6 +228,7 @@ err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
     state->client_pcb = client_pcb;
     state->is_connected = true;
     state->can_send = true;
+    state->is_websocket_ready = false; // Nouveau client = doit faire le Handshake !
 
     tcp_arg(client_pcb, state);
     tcp_sent(client_pcb, tcp_server_sent);
@@ -228,4 +283,3 @@ tcp_server_t* tcp_server_open(void) {
     printf("Server is now listening.\n");
     return state;
 }
-

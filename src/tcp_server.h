@@ -21,6 +21,8 @@ typedef struct {
 
     bool can_send;
     bool is_connected;
+
+    bool is_websocket_ready;
 } tcp_server_t;
 
 tcp_server_t* tcp_server_init(void);

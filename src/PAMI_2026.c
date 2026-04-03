@@ -82,7 +82,20 @@ void send_lidar_telemetry(tcp_server_t *tcp_state, float rx, float ry, float rth
     }
 
     // 4. Envoi des données
-    tcp_server_send_data(tcp_state, tx_buffer, total_size);
+    // tcp_server_send_data(tcp_state, tx_buffer, total_size);
+
+    // Créer un buffer plus grand pour accueillir l'en-tête WebSocket en plus
+    static uint8_t ws_final_buffer[8192]; 
+
+    // Emballer la trame TCP classique dans une trame WebSocket Binaire (OPCODE_BIN)
+    // mask = 0 (Obligatoire du Serveur vers Client)
+    uint64_t ws_packet_len = WS_BuildPacket((char*)ws_final_buffer, sizeof(ws_final_buffer), 
+                                            WEBSOCKET_OPCODE_BIN, 
+                                            (char*)tx_buffer, total_size, 0);
+
+    if (ws_packet_len > 0 && ws_packet_len < sizeof(ws_final_buffer)) {
+        tcp_server_send_data(tcp_state, ws_final_buffer, ws_packet_len);
+    }
 }
 
 // --- Helper: Ease-Out Interpolation ---
