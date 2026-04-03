@@ -8,6 +8,7 @@
 #include "mbedtls/sha1.h"
 #include "mbedtls/base64.h"
 
+
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
@@ -57,6 +58,9 @@
 #include "lwipopts.h"
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
+#include "lwip/ip4_addr.h"
+#include "lwip/netif.h"
+#include "lwip/dhcp.h"
 
 #include "mbedtls/sha1.h"
 #include "mbedtls/base64.h"

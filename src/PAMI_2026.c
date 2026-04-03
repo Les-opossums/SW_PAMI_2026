@@ -4,6 +4,8 @@
 #define M_TWO_PI 6.28318530717958647692f
 #endif
 
+
+#define ROBOT_ID 1
 // ==========================================
 // --- Configuration SCREEN (Feature/Screen) ---
 // ==========================================
@@ -140,7 +142,6 @@ int main()
     Init_All();
 
     // --- Initialisation du Wi-Fi ---
-
     bool wifi_initialized = false;
     bool wifi_connected = false;
 
@@ -148,16 +149,35 @@ int main()
         wifi_initialized = true;
         cyw43_arch_enable_sta_mode();
 
-        printf("Connexion au Wi-Fi...\n");
+        // // ==========================================
+        // // --- CONFIGURATION IP FIXE (STATIQUE) ---
+        // // ==========================================
+        // extern cyw43_t cyw43_state;
+        // struct netif *netif = &cyw43_state.netif[CYW43_ITF_STA];
+
+        // ip4_addr_t ip, netmask, gw;
+        
+        // // Configuration de l'IP : 10.170.254.70 + le numéro du robot
+        // // Ex: ROBOT_ID 2 donnera l'IP 10.170.254.72
+        // IP4_ADDR(&ip, 10, 170, 254, 70 + ROBOT_ID); 
+        // IP4_ADDR(&netmask, 255, 255, 255, 0); // Masque sous-réseau classique
+        // IP4_ADDR(&gw, 10, 170, 254, 1);       // Passerelle (IP de ton routeur/hotspot)
+
+        // // On arrête le DHCP par sécurité et on force notre IP
+        // dhcp_stop(netif); 
+        // netif_set_addr(netif, &ip, &netmask, &gw);
+        // ==========================================
+
+        printf("Connexion au Wi-Fi avec l'IP fixe : 10.170.254.%d...\n", 70 + ROBOT_ID);
         if (cyw43_arch_wifi_connect_timeout_ms("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK, 10000)) {
             printf("Échec de la connexion Wi-Fi. Le robot passe en mode STANDALONE.\n");
-            // ON NE MET PLUS DE return 1; ICI !
         } else {
             printf("Wi-Fi connecté !\n");
             wifi_connected = true;
-            extern cyw43_t cyw43_state;
+            
+            // Vérification de l'IP appliquée
             uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-            printf("Adresse IP: %d.%d.%d.%d\n", 
+            printf("Adresse IP confirmée: %d.%d.%d.%d\n", 
                 ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
         }
     } else {
@@ -303,7 +323,7 @@ int main()
                     RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
                     
                     if (measured.valid && lidar_loc_en){
-                        printf("LIDAR LOC: x=%.1f y=%.1f t=%.2f\n", measured.x, measured.y, measured.theta);
+                        // printf("LIDAR LOC: x=%.1f y=%.1f t=%.2f\n", measured.x, measured.y, measured.theta);
 
                         // ---> SAUVEGARDE POUR LE DEBUG PYTHON (En millimètres) <---
                         last_lidar_pose.x = measured.x;
