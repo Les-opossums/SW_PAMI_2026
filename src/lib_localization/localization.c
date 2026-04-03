@@ -15,6 +15,15 @@
 #define HIST_CENTER (HIST_SIZE / 2) // center index of histogram
 #define MIN_WALL_PTS 5 // minimum number of points to consider a wall valid
 
+
+float table_size_x = TABLE_SIZE_X;
+float table_size_y = TABLE_SIZE_Y;
+
+void set_table_size(float size_x, float size_y) {
+    table_size_x = size_x;
+    table_size_y = size_y;
+}
+
 static float refine_peak(const uint16_t* hist, int peak_idx) {
     if (peak_idx < 1 || peak_idx >= HIST_SIZE - 1) return (float)peak_idx;
     
@@ -151,9 +160,9 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     int search_window = 400 / HIST_RES; 
 
     int expected_left_idx   = (int)(-prev_pose->x / HIST_RES) + HIST_CENTER;
-    int expected_right_idx  = (int)((TABLE_SIZE_X - prev_pose->x) / HIST_RES) + HIST_CENTER;
+    int expected_right_idx  = (int)((table_size_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
     int expected_bottom_idx = (int)(-prev_pose->y / HIST_RES) + HIST_CENTER;
-    int expected_top_idx    = (int)((TABLE_SIZE_Y - prev_pose->y) / HIST_RES) + HIST_CENTER;
+    int expected_top_idx    = (int)((table_size_y - prev_pose->y) / HIST_RES) + HIST_CENTER;
 
     int left_idx = -1, right_idx = -1, bottom_idx = -1, top_idx = -1;
     int max_val;
@@ -198,7 +207,7 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         x_updated = true;
     } else if (right_idx != -1) {
         float exact_idx = refine_peak(x_hist, right_idx);
-        calculated_x = TABLE_SIZE_X - ((exact_idx - HIST_CENTER) * HIST_RES);
+        calculated_x = table_size_x - ((exact_idx - HIST_CENTER) * HIST_RES);
         x_updated = true;
     }
 
@@ -212,7 +221,7 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         y_updated = true;
     } else if (top_idx != -1) {
         float exact_idx = refine_peak(y_hist, top_idx);
-        calculated_y = TABLE_SIZE_Y - ((exact_idx - HIST_CENTER) * HIST_RES);
+        calculated_y = table_size_y - ((exact_idx - HIST_CENTER) * HIST_RES);
         y_updated = true;
     }
 

@@ -24,6 +24,9 @@ const Command Command_List[] = {
     { "SETY", SETY_Cmd},
     { "SETT", SETT_Cmd},
     { "SET0", SET0_Cmd},
+    { "SET", SET_Cmd},
+
+    { "TABLESIZE", TABLESIZE_Func},
 
     { "VMAX", VMAX_Cmd},
     { "VTMAX", VTMAX_Cmd},

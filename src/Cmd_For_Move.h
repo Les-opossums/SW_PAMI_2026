@@ -18,6 +18,7 @@ uint8_t SETX_Cmd(void);
 uint8_t SETY_Cmd(void);
 uint8_t SETT_Cmd(void);
 uint8_t SET0_Cmd(void);
+uint8_t SET_Cmd(void);
 
 uint8_t VMAX_Cmd(void);
 uint8_t VTMAX_Cmd(void);
@@ -26,6 +27,8 @@ uint8_t PWM_Func(void);
 uint8_t PWM1_Func(void);
 uint8_t PWM2_Func(void);
 uint8_t PWM3_Func(void);
+
+uint8_t TABLESIZE_Func(void);
 
 uint8_t Asserv_Mode_Cmd(void);
 uint8_t Param_Asserv_Cmd(void);

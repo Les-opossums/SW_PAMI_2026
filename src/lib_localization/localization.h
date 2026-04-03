@@ -18,4 +18,6 @@ typedef struct {
 
 
 RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose);
+
+void set_table_size(float size_x, float size_y);
 #endif // LOCALIZATION_H

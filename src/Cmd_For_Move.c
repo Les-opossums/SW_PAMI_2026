@@ -158,7 +158,27 @@ uint8_t SET0_Cmd(void) {
     return 0;
 }
 
+uint8_t SET_Cmd(void) {
+    Position Pos;
+    float valf;
+    if (Get_Param_Float(&valf)) return 1;
+    Pos.x = valf;
+    if (Get_Param_Float(&valf)) return 1;
+    Pos.y = valf;
+    if (Get_Param_Float(&valf)) return 1;
+    Pos.t = valf;
+    set_position(Pos);
+    Fusion_Init(Pos.x, Pos.y, Pos.t);
+    return 0;
+}
 
+uint8_t TABLESIZE_Func(void){
+    float valf1, valf2;
+    if(Get_Param_Float(&valf1)) return 1;
+    if(Get_Param_Float(&valf2)) return 1;
+    set_table_size(valf1, valf2);
+    return 0;
+}
 
 // VMAX
 
