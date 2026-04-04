@@ -197,3 +197,49 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
 
     return cmd;
 }
+
+void Set_pathfinding_parameters(float goal_tolerance, float max_speed, float max_rotation, float attractive_gain,
+                                float dmin, float dmax, float fmax, float lat_gain, float shld_max, float f_shield) {
+    pf_goal_tolerance = goal_tolerance;
+    pf_max_speed = max_speed;
+    pf_max_rotation = max_rotation;
+    pf_attractive_gain = attractive_gain;
+
+    d_min = dmin;
+    d_max = dmax;
+    force_max = fmax;
+    lateral_gain = lat_gain;
+    shield_max = shld_max;
+    force_shield = f_shield;
+}
+
+uint8_t Set_Pathfinding_parameters_Cmd(void){
+    uint32_t param;
+    float valf;
+    if (Get_Param_u32(&param))
+        return 1;
+    if (Get_Param_Float(&valf))
+        return 1;
+
+    switch(param) {
+        case 0: pf_goal_tolerance = valf; break;
+        case 1: pf_max_speed = valf; break;
+        case 2: pf_max_rotation = valf; break;
+        case 3: pf_attractive_gain = valf; break;
+        case 4: d_min = valf; break;
+        case 5: d_max = valf; break;
+        case 6: force_max = valf; break;
+        case 7: lateral_gain = valf; break;
+        case 8: shield_max = valf; break;
+        case 9: force_shield = valf; break;
+        default: return 2; // Paramètre inconnu
+    }
+    return 0;
+}
+
+uint8_t Get_Pathfinding_parameters_Cmd(void){
+    printf("Pathfinding Parameters: Goal_Tolerance=%.2f, Max_Speed=%.2f, Max_Rotation=%.2f, Attractive_Gain=%.2f, D_min=%.2f, D_max=%.2f, Force_Max=%.2f, Lateral_Gain=%.2f, Shield_Max=%.2f, Force_Shield=%.2f\n",
+        (double)pf_goal_tolerance, (double)pf_max_speed, (double)pf_max_rotation, (double)pf_attractive_gain,
+        (double)d_min, (double)d_max, (double)force_max, (double)lateral_gain, (double)shield_max, (double)force_shield);
+    return 0;
+}

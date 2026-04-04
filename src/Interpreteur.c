@@ -30,6 +30,9 @@ const Command Command_List[] = {
     { "LOCEN", En_localisation_Cmd},
     { "AVOIDEN", Avoidance_En_Cmd},
 
+    { "SETPATHFINDING", Set_Pathfinding_parameters_Cmd},
+    { "GETPATHFINDING", Get_Pathfinding_parameters_Cmd},
+
     { "VMAX", VMAX_Cmd},
     { "VTMAX", VTMAX_Cmd},
     { "AMAX", AMAX_Cmd},

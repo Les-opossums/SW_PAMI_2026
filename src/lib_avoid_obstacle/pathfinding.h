@@ -71,4 +71,9 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
 void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, float *rep_vx, float *rep_vy);
 
 void init_pathfinding_parameters(void);
+void Set_pathfinding_parameters(float goal_tolerance, float max_speed, float max_rotation, float attractive_gain,
+                                float dmin, float dmax, float fmax, float lat_gain, float shld_max, float f_shield);
+uint8_t Set_Pathfinding_parameters_Cmd(void);
+uint8_t Get_Pathfinding_parameters_Cmd(void);
+
 #endif // PATHFINDING_H
