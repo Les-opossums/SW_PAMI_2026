@@ -16,6 +16,7 @@
 #include "hardware/uart.h"
 #include "hardware/irq.h"
 #include "hardware/dma.h"
+#include "hardware/adc.h"
 
 
 #include "PAMI_2026_IO.h"

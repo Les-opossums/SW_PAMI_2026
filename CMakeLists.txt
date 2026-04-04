@@ -69,6 +69,7 @@ target_link_libraries(PAMI_2026
                         hardware_uart
                         hardware_dma
                         hardware_gpio
+                        hardware_adc
                         pico_multicore
                         pico_sync            
                         hardware_spi            

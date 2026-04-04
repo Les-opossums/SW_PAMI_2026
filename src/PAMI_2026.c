@@ -22,6 +22,9 @@ int lidar_loc_en = 1; // 0 = off, 1 = on (use lidar for localization correction)
 int freq_robot_data_update = 20; // Hz
 int last_robot_data_update_time = 0;
 
+int freq_batteries_update = 1; // Hz
+int last_batteries_update_time = 0;
+
 int start_match = 0; // Set to 1 when the match starts (e.g., when the leash is activated)
 
 // ==========================================
@@ -289,10 +292,10 @@ int main()
                 sequencer++;
                 break;
             case 1:
-                if (current_au_state == 1) { // Only run asserv loop if not in AU mode
+                if (current_au_state == 1) { 
                     Asserv_Loop();
-                    if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) { // e.g., 20 Hz
-                        // printf("ROBOTDATA 1 2 3 4 5 6\n");
+                    
+                    if (Timer_ms1 % freq_robot_data_update == 0 && Timer_ms1 != last_robot_data_update_time) {
 
                         last_robot_data_update_time = Timer_ms1;
                     }
@@ -401,6 +404,35 @@ int main()
                 }
                 sequencer++;
                 break;
+            case 6:
+                    if (Timer_ms1 - last_batteries_update_time >= 1000) {
+                        
+                        // ON VÉRIFIE QUE LA LIGNE EST LIBRE (can_send)
+                        if (tcp_state && tcp_state->is_connected && tcp_state->can_send) {
+                            
+                            // 1. Lecture de la batterie
+                            adc_select_input(0);
+                            float adc_val = (float)adc_read();
+                            float vbat = (adc_val / 4095.0f) * 9.9f;
+
+                            // 2. Formatage
+                            char bat_msg[32];
+                            snprintf(bat_msg, sizeof(bat_msg), "BAT:%.2f\n", (double)vbat);
+                            
+                            // 3. Envoi
+                            char ws_buf[128];
+                            uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 
+                                                               WEBSOCKET_OPCODE_TEXT, 
+                                                               bat_msg, strlen(bat_msg), 0);
+                            tcp_server_send_data(tcp_state, (uint8_t*)ws_buf, pack_len);
+
+                            // 4. On valide qu'on a bien envoyé, on relance le chrono !
+                            last_batteries_update_time = Timer_ms1;
+                        }
+                    }
+                sequencer++;
+                break;
+
             default:
                 sequencer = 0;
                 break;
@@ -426,6 +458,10 @@ void Init_All(void)
     //init TEAM
     gpio_init(TEAM_PIN);
     gpio_set_dir(TEAM_PIN, GPIO_IN);
+
+    // Initialisation ADC pour la batterie
+    adc_init();
+    adc_gpio_init(26);
 }
 
 uint8_t FREQ_Cmd(void) {
