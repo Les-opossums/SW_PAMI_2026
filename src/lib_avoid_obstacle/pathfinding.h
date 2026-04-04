@@ -5,16 +5,35 @@
 #define PF_GOAL_TOLERANCE     50.0f   
 #define PF_MAX_SPEED          300.0f  
 #define PF_MAX_ROTATION       2.0f    
-
 #define PF_ATTRACTIVE_GAIN    1.5f    
 
-#define PF_AVOID_DIST 200.0f
+
+// =========================================================
+// PARAMÈTRES
+// =========================================================
+#define D_MIN           60.0f
+
+// 1. Paramètres du Cône Avant (Tactique)
+#define D_MAX           160.0f
+#define FORCE_MAX       300.0f 
+#define LATERAL_GAIN    1.0f 
+
+// 2. Paramètres du Bouclier Angles Morts (Survie)
+#define SHIELD_MAX      100.0f
+#define FORCE_SHIELD    400.0f
 
 
-#define PF_MIN_DIST 220.0f
-#define PF_SURVIVAL_DIST 80.0f
-#define PF_FORCE_MAG 6.0f
-#define PF_MAX_REPULSION 150.0f 
+extern float pf_goal_tolerance;
+extern float pf_max_speed;
+extern float pf_max_rotation;
+extern float pf_attractive_gain;
+
+extern float d_min;
+extern float d_max;
+extern float force_max;
+extern float lateral_gain;
+extern float shield_max;
+extern float force_shield;  
 
 
 typedef struct {
@@ -50,4 +69,6 @@ void Path_SetGoal(float x, float y);
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan);
 
 void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, float *rep_vx, float *rep_vy);
+
+void init_pathfinding_parameters(void);
 #endif // PATHFINDING_H

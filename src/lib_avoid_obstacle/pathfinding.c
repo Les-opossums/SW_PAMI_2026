@@ -5,6 +5,31 @@
 #define M_PI 3.14159265358979323846f
 #endif
 
+float pf_goal_tolerance;
+float pf_max_speed;
+float pf_max_rotation;
+float pf_attractive_gain;
+float d_min;
+float d_max;
+float force_max;
+float lateral_gain;
+float shield_max;
+float force_shield;
+
+void init_pathfinding_parameters(void) {
+    pf_goal_tolerance = PF_GOAL_TOLERANCE;
+    pf_max_speed = PF_MAX_SPEED;
+    pf_max_rotation = PF_MAX_ROTATION;
+    pf_attractive_gain = PF_ATTRACTIVE_GAIN;
+
+    d_min = D_MIN;
+    d_max = D_MAX;
+    force_max = FORCE_MAX;
+    lateral_gain = LATERAL_GAIN;
+    shield_max = SHIELD_MAX;
+    force_shield = FORCE_SHIELD;
+}
+
 // Internal state for the current goal
 static Point2D current_goal = {0.0f, 0.0f};
 
@@ -35,27 +60,13 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
 
     if (scan == NULL || scan->index == 0) return;
 
-    // =========================================================
-    // PARAMÈTRES
-    // =========================================================
-    const float D_MIN = 60.0f; 
-
-    // 1. Paramètres du Cône Avant (Tactique)
-    const float D_MAX = 160.0f; 
-    const float FORCE_MAX = 300.0f; 
-    const float LATERAL_GAIN = 1.0f; 
-
-    // 2. Paramètres du Bouclier Angles Morts (Survie)
-    const float SHIELD_MAX = 100.0f;  
-    const float FORCE_SHIELD = 400.0f; 
-
     // Variables pour l'avant dynamique
-    float min_front_dist = D_MAX;
+    float min_front_dist = d_max;
     float front_angle = 0.0f;
     bool front_found = false;
 
     // Variables pour les côtés et l'arrière
-    float min_blind_dist = SHIELD_MAX;
+    float min_blind_dist = shield_max;
     float blind_angle = 0.0f;
     bool blind_found = false;
 
@@ -99,11 +110,11 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
 
     // 2. CALCUL DE LA FORCE AVANT (Répulsion + Glissade)
     if (front_found) {
-        float penetration = (D_MAX - min_front_dist) / (D_MAX - D_MIN);
+        float penetration = (d_max - min_front_dist) / (d_max - d_min);
         if (penetration < 0.0f) penetration = 0.0f;
         if (penetration > 1.2f) penetration = 1.2f; 
 
-        float force_mag = FORCE_MAX * penetration;
+        float force_mag = force_max * penetration;
 
         float r_x = -cosf(front_angle);
         float r_y = -sinf(front_angle);
@@ -116,11 +127,11 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
 
     // 3. CALCUL DU BOUCLIER 360° (Répulsion pure uniquement)
     if (blind_found) {
-        float penetration = (SHIELD_MAX - min_blind_dist) / (SHIELD_MAX - D_MIN);
+        float penetration = (shield_max - min_blind_dist) / (shield_max - d_min);
         if (penetration < 0.0f) penetration = 0.0f;
         if (penetration > 1.2f) penetration = 1.2f; 
 
-        float force_mag = FORCE_SHIELD * penetration;
+        float force_mag = force_shield * penetration;
 
         float r_x = -cosf(blind_angle);
         float r_y = -sinf(blind_angle);
@@ -129,7 +140,7 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
         sum_vy += force_mag * r_y;
     }
 
-    limit_magnitude(&sum_vx, &sum_vy, FORCE_MAX * 1.2f);
+    limit_magnitude(&sum_vx, &sum_vy, force_max * 1.2f);
 
     // =========================================================
     // LE FILTRE (Lissage pour éviter qu'il tremble)
