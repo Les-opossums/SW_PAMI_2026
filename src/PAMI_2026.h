@@ -70,6 +70,10 @@
 #define Max_Ternaire(a,b) (((a)>(b))?(a):(b))
 #define sizetab(a) (sizeof(a)/sizeof(a[0]))
 
+
+#define ROBOT_ID 1
+
+
 void Init_All(void);
 
 uint8_t FREQ_Cmd(void);

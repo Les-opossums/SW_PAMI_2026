@@ -163,12 +163,23 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
             WebsocketPacketHeader_t ws_header;
             if (WS_ParsePacket(&ws_header, (char*)state->buffer_recv, len) == 0) {
                 
-                // Si c'est une trame texte (OPCODE 1) on l'envoie à l'interpréteur
+                // Si c'est une trame texte (OPCODE 1)
                 if (ws_header.meta.bits.OPCODE == WEBSOCKET_OPCODE_TEXT) {
                     char *payload = (char*)state->buffer_recv + ws_header.start;
                     
-                    for(uint16_t i = 0; i < ws_header.length; i++) {
-                        Interp((int)payload[i]);
+                    if (strncmp(payload, "WHOAMI", 6) == 0) {
+                        char response[32];
+                        snprintf(response, sizeof(response), "PAMI_ID:%d", ROBOT_ID);
+                        
+                        char ws_buf[128];
+                        uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 
+                                                           WEBSOCKET_OPCODE_TEXT, 
+                                                           response, strlen(response), 0);
+                        tcp_server_send_data(state, (uint8_t*)ws_buf, pack_len);
+                    } else {
+                        for(uint16_t i = 0; i < ws_header.length; i++) {
+                            Interp((int)payload[i]);
+                        }
                     }
                 }
                 // Si la trame est une demande de déconnexion (OPCODE 8)
