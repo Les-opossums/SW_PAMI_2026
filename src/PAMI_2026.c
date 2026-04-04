@@ -29,6 +29,7 @@ int start_match = 0; // Set to 1 when the match starts (e.g., when the leash is 
 // ==========================================
 // Variable globale pour activer/désactiver l'envoi depuis l'interpréteur ou le code
 volatile uint8_t enable_tcp_telemetry = 1; 
+tcp_server_t *tcp_state = NULL;
 
 // On force l'alignement à 1 octet pour éviter le padding dans la trame réseau
 #pragma pack(push, 1)
@@ -139,6 +140,8 @@ int main()
     Fusion_Init(0.2f, 0.2f, 1.5f); // init x y theta
     Init_All();
 
+    init_pathfinding_parameters(); // Initialize pathfinding parameters with defaults
+
     // --- Initialisation du Wi-Fi ---
     bool wifi_initialized = false;
     bool wifi_connected = false;
@@ -179,7 +182,6 @@ int main()
     }
 
     // --- Démarrage du serveur TCP (Uniquement si connecté) ---
-    tcp_server_t *tcp_state = NULL;
     if (wifi_connected) {
         tcp_state = tcp_server_open();
         if (!tcp_state) {

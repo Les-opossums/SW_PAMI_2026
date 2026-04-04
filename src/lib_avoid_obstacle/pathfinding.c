@@ -222,24 +222,43 @@ uint8_t Set_Pathfinding_parameters_Cmd(void){
         return 1;
 
     switch(param) {
-        case 0: pf_goal_tolerance = valf; break;
-        case 1: pf_max_speed = valf; break;
-        case 2: pf_max_rotation = valf; break;
-        case 3: pf_attractive_gain = valf; break;
-        case 4: d_min = valf; break;
-        case 5: d_max = valf; break;
-        case 6: force_max = valf; break;
-        case 7: lateral_gain = valf; break;
-        case 8: shield_max = valf; break;
-        case 9: force_shield = valf; break;
+        case 0: pf_goal_tolerance = valf; printf("Pathfinding Parameter 'Goal_Tolerance' set to %.2f\n", valf);break;
+        case 1: pf_max_speed = valf; printf("Pathfinding Parameter 'Max_Speed' set to %.2f\n", valf); break;
+        case 2: pf_max_rotation = valf; printf("Pathfinding Parameter 'Max_Rotation' set to %.2f\n", valf); break;
+        case 3: pf_attractive_gain = valf; printf("Pathfinding Parameter 'Attractive_Gain' set to %.2f\n", valf); break;
+        case 4: d_min = valf; printf("Pathfinding Parameter 'D_min' set to %.2f\n", valf); break;
+        case 5: d_max = valf; printf("Pathfinding Parameter 'D_max' set to %.2f\n", valf); break;
+        case 6: force_max = valf; printf("Pathfinding Parameter 'Force_Max' set to %.2f\n", valf); break;
+        case 7: lateral_gain = valf; printf("Pathfinding Parameter 'Lateral_Gain' set to %.2f\n", valf); break;
+        case 8: shield_max = valf; printf("Pathfinding Parameter 'Shield_Max' set to %.2f\n", valf); break;
+        case 9: force_shield = valf; printf("Pathfinding Parameter 'Force_Shield' set to %.2f\n", valf); break;
         default: return 2; // Paramètre inconnu
     }
     return 0;
 }
 
 uint8_t Get_Pathfinding_parameters_Cmd(void){
+    // 1. Ton log console classique
     printf("Pathfinding Parameters: Goal_Tolerance=%.2f, Max_Speed=%.2f, Max_Rotation=%.2f, Attractive_Gain=%.2f, D_min=%.2f, D_max=%.2f, Force_Max=%.2f, Lateral_Gain=%.2f, Shield_Max=%.2f, Force_Shield=%.2f\n",
         (double)pf_goal_tolerance, (double)pf_max_speed, (double)pf_max_rotation, (double)pf_attractive_gain,
         (double)d_min, (double)d_max, (double)force_max, (double)lateral_gain, (double)shield_max, (double)force_shield);
+
+    // 2. Formatage pour la page Web (séparé par des virgules pour un décodage facile en JS)
+    char response[256];
+    snprintf(response, sizeof(response), "PF_PARAMS:%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+        (double)pf_goal_tolerance, (double)pf_max_speed, (double)pf_max_rotation, (double)pf_attractive_gain,
+        (double)d_min, (double)d_max, (double)force_max, (double)lateral_gain, (double)shield_max, (double)force_shield);
+
+    // 3. Envoi via lwIP (Assure-toi d'avoir accès à tcp_state global ici, ou passe-le en paramètre si besoin)
+    // /!\ Le code ci-dessous est un exemple à adapter si tcp_state n'est pas global dans ton architecture.
+    extern tcp_server_t *tcp_state; // Exemple si défini en global
+    if (tcp_state && tcp_state->is_connected) {
+        char ws_buf[300];
+        uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 
+                                           WEBSOCKET_OPCODE_TEXT, 
+                                           response, strlen(response), 0);
+        tcp_server_send_data(tcp_state, (uint8_t*)ws_buf, pack_len);
+    }
+    
     return 0;
 }
