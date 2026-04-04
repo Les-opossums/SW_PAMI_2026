@@ -220,11 +220,13 @@ void pos_asserv_step(void) {
     // atan2f(Y local, X local) donne l'angle de notre glissade par rapport au nez du robot.
     float motion_angle_rad = atan2f(att_vy_local, att_vx_local);
 
+    RobotPose current_pose = {position_robot.x, position_robot.y, position_robot.t, true};
+
     // On passe cet angle directionnel au Lidar pour qu'il oriente son "Cône Tactique" !
     if(avoidance_en) {
-        Path_GetRepulsionVector(LD19.currentScan, motion_angle_rad, &rep_vx_local, &rep_vy_local);
+        Path_GetRepulsionVector(LD19.currentScan, motion_angle_rad, current_pose, &rep_vx_local, &rep_vy_local);
     } else {
-        Path_GetRepulsionVector(NULL, motion_angle_rad, &rep_vx_local, &rep_vy_local);
+        Path_GetRepulsionVector(NULL, motion_angle_rad, current_pose, &rep_vx_local, &rep_vy_local);
     }
     // ==========================================
     // 3. FUSION APF

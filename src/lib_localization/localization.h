@@ -9,6 +9,9 @@
 
 #define LD19_MAX_PTS_SCAN 1200
 
+extern float table_size_x;
+extern float table_size_y;
+
 typedef struct {
     float x;      // in mm
     float y;      // in mm

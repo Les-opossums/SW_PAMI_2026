@@ -22,6 +22,10 @@
 #define SHIELD_MAX      100.0f
 #define FORCE_SHIELD    400.0f
 
+#define MIN_CLUSTER_PTS 5
+#define CLUSTER_TOLERANCE 75.0f
+
+#define BORDER_MARGIN 50.0f
 
 extern float pf_goal_tolerance;
 extern float pf_max_speed;
@@ -34,6 +38,7 @@ extern float force_max;
 extern float lateral_gain;
 extern float shield_max;
 extern float force_shield;  
+
 
 
 typedef struct {
@@ -68,7 +73,7 @@ void Path_SetGoal(float x, float y);
  */
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan);
 
-void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, float *rep_vx, float *rep_vy);
+void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, RobotPose current_pose, float *rep_vx, float *rep_vy);
 
 void init_pathfinding_parameters(void);
 void Set_pathfinding_parameters(float goal_tolerance, float max_speed, float max_rotation, float attractive_gain,
