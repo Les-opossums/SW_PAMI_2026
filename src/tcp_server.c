@@ -167,9 +167,14 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                 if (ws_header.meta.bits.OPCODE == WEBSOCKET_OPCODE_TEXT) {
                     char *payload = (char*)state->buffer_recv + ws_header.start;
                     
+                    // --- DEBUG : Afficher la trame texte reçue (les 6 premiers caractères) ---
+                    printf("[C DEBUG] Trame texte reçue: '%.*s'\n", ws_header.length > 6 ? 6 : ws_header.length, payload);
+
                     if (strncmp(payload, "WHOAMI", 6) == 0) {
                         char response[32];
                         snprintf(response, sizeof(response), "PAMI_ID:%d", ROBOT_ID);
+                        
+                        printf("[C DEBUG] Commande WHOAMI reconnue ! Envoi de : %s\n", response);
                         
                         char ws_buf[128];
                         uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 
@@ -177,6 +182,7 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                                                            response, strlen(response), 0);
                         tcp_server_send_data(state, (uint8_t*)ws_buf, pack_len);
                     } else {
+                        printf("[C DEBUG] Commande non reconnue reçue: '%.*s'\n", ws_header.length > 6 ? 6 : ws_header.length, payload);
                         for(uint16_t i = 0; i < ws_header.length; i++) {
                             Interp((int)payload[i]);
                         }
@@ -184,8 +190,20 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                 }
                 // Si la trame est une demande de déconnexion (OPCODE 8)
                 else if (ws_header.meta.bits.OPCODE == WEBSOCKET_OPCODE_CLOSE) {
-                    printf("WebSocket Client requested closure.\n");
-                    // On ferme au prochain tick
+                    printf("WebSocket Client requested closure. Fermeture propre.\n");
+                    
+                    // On libère la mémoire lwIP avant de tuer la connexion
+                    tcp_recved(tpcb, p->tot_len);
+                    pbuf_free(p);
+                    
+                    // On reset l'état
+                    state->is_connected = false;
+                    state->is_websocket_ready = false;
+                    state->client_pcb = NULL;
+                    
+                    // Fermeture douce du socket
+                    tcp_close(tpcb);
+                    return ERR_OK;
                 }
             }
         }

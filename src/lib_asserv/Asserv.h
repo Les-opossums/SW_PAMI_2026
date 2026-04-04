@@ -25,6 +25,8 @@ extern float default_stop_distance;
 
 extern int emergency_break_requested;
 
+extern int avoidance_en;
+
 /******************************    Fonctions    *******************************/
 
 // initialiser le mode et les differents asservissements

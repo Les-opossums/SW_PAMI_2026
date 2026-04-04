@@ -23,6 +23,8 @@ float a_max = DEFAULT_CONSTRAINT_A_MAX;
 
 int emergency_break_requested = 0;
 
+int avoidance_en = 1;
+
 /******************************    Fonctions    *******************************/
 static void limit_magnitude(float* x, float* y, float max_val) {
     float mag_sq = (*x * *x) + (*y * *y);
@@ -59,6 +61,8 @@ void asserv_init(void) {
     default_stop_distance = DEFAULT_STOP_DISTANCE;
 
     emergency_break_requested = 0;
+
+    avoidance_en = 1;
 }
 
 
@@ -217,8 +221,11 @@ void pos_asserv_step(void) {
     float motion_angle_rad = atan2f(att_vy_local, att_vx_local);
 
     // On passe cet angle directionnel au Lidar pour qu'il oriente son "Cône Tactique" !
-    Path_GetRepulsionVector(LD19.previousScan, motion_angle_rad, &rep_vx_local, &rep_vy_local);
-
+    if(avoidance_en) {
+        Path_GetRepulsionVector(LD19.currentScan, motion_angle_rad, &rep_vx_local, &rep_vy_local);
+    } else {
+        Path_GetRepulsionVector(NULL, motion_angle_rad, &rep_vx_local, &rep_vy_local);
+    }
     // ==========================================
     // 3. FUSION APF
     // ==========================================

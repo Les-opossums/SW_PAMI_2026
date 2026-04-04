@@ -256,6 +256,18 @@ uint8_t PWM3_Func(void)
     return 0;
 }
 
+uint8_t En_localisation_Cmd(void)
+{
+    int val;
+    if (Get_Param_u32((uint32_t*)&val))    return PARAM_ERROR_CODE;    // front
+    lidar_loc_en = val;
+}
+
+uint8_t Avoidance_En_Cmd(void){
+    int val;
+    if (Get_Param_u32((uint32_t*)&val))    return PARAM_ERROR_CODE;    // front
+    avoidance_en = val;
+}
 
 
 uint8_t Asserv_Mode_Cmd(void) {

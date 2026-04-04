@@ -3,3 +3,4 @@ build
 CMakeFiles/
 generated/
 pico-sdk/
+src/wifi_credentials.h

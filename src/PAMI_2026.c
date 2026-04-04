@@ -146,38 +146,34 @@ int main()
     if (cyw43_arch_init() == 0) {
         wifi_initialized = true;
         cyw43_arch_enable_sta_mode();
-
-        // // ==========================================
-        // // --- CONFIGURATION IP FIXE (STATIQUE) ---
-        // // ==========================================
-        // extern cyw43_t cyw43_state;
-        // struct netif *netif = &cyw43_state.netif[CYW43_ITF_STA];
-
-        // ip4_addr_t ip, netmask, gw;
         
-        // // Configuration de l'IP : 10.170.254.70 + le numéro du robot
-        // // Ex: ROBOT_ID 2 donnera l'IP 10.170.254.72
-        // IP4_ADDR(&ip, 10, 170, 254, 70 + ROBOT_ID); 
-        // IP4_ADDR(&netmask, 255, 255, 255, 0); // Masque sous-réseau classique
-        // IP4_ADDR(&gw, 10, 170, 254, 1);       // Passerelle (IP de ton routeur/hotspot)
+        printf("\nRecherche de réseaux Wi-Fi connus...\n");
 
-        // // On arrête le DHCP par sécurité et on force notre IP
-        // dhcp_stop(netif); 
-        // netif_set_addr(netif, &ip, &netmask, &gw);
-        // ==========================================
-
-        printf("Connexion au Wi-Fi avec l'IP fixe : 10.170.254.%d...\n", 70 + ROBOT_ID);
-        if (cyw43_arch_wifi_connect_timeout_ms("Opossum", "r28w3fr7j3zu8r4", CYW43_AUTH_WPA2_AES_PSK, 10000)) {
-            printf("Échec de la connexion Wi-Fi. Le robot passe en mode STANDALONE.\n");
-        } else {
-            printf("Wi-Fi connecté !\n");
-            wifi_connected = true;
+        // Boucle sur tous les réseaux configurés dans wifi_credentials.h
+        for (int i = 0; i < num_wifi_networks; i++) {
+            printf("Essai %d/%d : Tentative de connexion a '%s'...\n", i + 1, num_wifi_networks, wifi_networks[i].ssid);
             
-            // Vérification de l'IP appliquée
-            uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-            printf("Adresse IP confirmée: %d.%d.%d.%d\n", 
-                ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+            // On tente la connexion (retourne 0 en cas de succès)
+            if (cyw43_arch_wifi_connect_timeout_ms(wifi_networks[i].ssid, wifi_networks[i].password, CYW43_AUTH_WPA2_AES_PSK, 10000) == 0) {
+                printf(">> Wi-Fi connecté avec succès à '%s' !\n", wifi_networks[i].ssid);
+                wifi_connected = true;
+                
+                // Vérification de l'IP appliquée
+                uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
+                printf(">> Adresse IP : %d.%d.%d.%d\n", 
+                    ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+                
+                break; // Le robot est connecté, on sort de la boucle !
+            } else {
+                printf("Échec de connexion à '%s'. On passe au suivant.\n", wifi_networks[i].ssid);
+            }
         }
+
+        // Si la boucle s'est terminée sans succès
+        if (!wifi_connected) {
+            printf("\nAucun réseau Wi-Fi connu n'a été trouvé. Le robot passe en mode STANDALONE.\n");
+        }
+
     } else {
         printf("Échec de l'initialisation de la puce Wi-Fi. Mode STANDALONE.\n");
     }
@@ -194,7 +190,6 @@ int main()
     } else {
         printf("Serveur TCP ignoré (Mode Standalone).\n");
     }
-
     //lecture de la pin de la laisse
     bool last_leash_state = gpio_get(LEASH_PIN);
     bool current_leash_state = last_leash_state;

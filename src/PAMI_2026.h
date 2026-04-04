@@ -61,6 +61,7 @@
 #include "lwip/ip4_addr.h"
 #include "lwip/netif.h"
 #include "lwip/dhcp.h"
+#include "wifi_credentials.h"
 
 #include "mbedtls/sha1.h"
 #include "mbedtls/base64.h"
@@ -73,6 +74,7 @@
 
 #define ROBOT_ID 1
 
+extern int lidar_loc_en;
 
 void Init_All(void);
 

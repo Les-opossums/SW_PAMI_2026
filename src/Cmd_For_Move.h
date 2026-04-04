@@ -27,6 +27,9 @@ uint8_t PWM_Func(void);
 uint8_t PWM1_Func(void);
 uint8_t PWM2_Func(void);
 uint8_t PWM3_Func(void);
+uint8_t En_localisation_Cmd(void);
+uint8_t Avoidance_En_Cmd(void);
+
 
 uint8_t TABLESIZE_Func(void);
 

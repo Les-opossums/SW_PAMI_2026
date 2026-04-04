@@ -27,6 +27,8 @@ const Command Command_List[] = {
     { "SET", SET_Cmd},
 
     { "TABLESIZE", TABLESIZE_Func},
+    { "LOCEN", En_localisation_Cmd},
+    { "AVOIDEN", Avoidance_En_Cmd},
 
     { "VMAX", VMAX_Cmd},
     { "VTMAX", VTMAX_Cmd},
