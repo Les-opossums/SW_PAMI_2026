@@ -44,18 +44,26 @@ static bool is_valid_obstacle(const LD19DataPointHandler* scan, int index) {
     int neighbor_count = 1;
     float base_d = scan->points[index].distance;
     
-    // Regarde les points suivants
-    for (int i = 1; i < min_cluster_pts; i++) {
+    // On ignore les points physiquement impossibles (à l'intérieur du lidar/chassis)
+    if (base_d < 60.0f) return false; 
+    
+    // On élargit la fenêtre de recherche (+2) pour tolérer 1 ou 2 points "ratés"
+    int window = (int)min_cluster_pts + 2; 
+
+    // Regarde devant
+    for (int i = 1; i <= window; i++) {
         int idx = (index + i) % scan->index;
-        if (fabsf(scan->points[idx].distance - base_d) < cluster_tolerance) neighbor_count++;
+        float d = scan->points[idx].distance;
+        if (d > 60.0f && fabsf(d - base_d) < cluster_tolerance) neighbor_count++;
     }
-    // Regarde les points précédents
-    for (int i = 1; i < min_cluster_pts; i++) {
+    // Regarde derrière
+    for (int i = 1; i <= window; i++) {
         int idx = (index - i + scan->index) % scan->index;
-        if (fabsf(scan->points[idx].distance - base_d) < cluster_tolerance) neighbor_count++;
+        float d = scan->points[idx].distance;
+        if (d > 60.0f && fabsf(d - base_d) < cluster_tolerance) neighbor_count++;
     }
     
-    return neighbor_count >= min_cluster_pts;
+    return neighbor_count >= (int)min_cluster_pts;
 }
 
 void Path_Init(void) {
@@ -98,8 +106,11 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
     for (int i = 0; i < scan->index; i++) {
         float d = scan->points[i].distance;
         
-        // On ignore les points trop proches (d < d_min) ou qui ne passent pas le filtre d'entretoises
-        if (d <= d_min || !is_valid_obstacle(scan, i)) continue;
+        // --- CORRECTION MAJEURE ICI ---
+        // ON NE FAIT PLUS "if (d <= d_min) continue;" !!!
+        // On élimine seulement ce qui est DANS le rayon du robot (ex: 60mm).
+        // Le filtre is_valid_obstacle se charge tout seul de supprimer les entretoises.
+        if (d < 60.0f || !is_valid_obstacle(scan, i)) continue;
 
         float angle_deg = scan->points[i].angle;
         if (angle_deg > 180.0f) angle_deg -= 360.0f;
@@ -107,15 +118,15 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
         float angle_rad = scan->points[i].angle * (M_PI / 180.0f);
 
         // --- CONSCIENCE DE LA TABLE ---
-        // Calcul de la position X/Y du point d'impact LIDAR sur la table
         float point_global_angle = current_pose.theta + angle_rad;
         float pt_x = current_pose.x + d * cosf(point_global_angle);
         float pt_y = current_pose.y + d * sinf(point_global_angle);
 
+        // Assure-toi que table_size_x et table_size_y sont bien globales ou définies
         bool is_border = false;
         if (pt_x < BORDER_MARGIN || pt_x > (table_size_x - BORDER_MARGIN) ||
             pt_y < BORDER_MARGIN || pt_y > (table_size_y - BORDER_MARGIN)) {
-            is_border = true; // C'est un mur de la table !
+            is_border = true; 
         }
 
         // --- CALCUL DE L'ÉCART AVEC LE MOUVEMENT ---
@@ -124,16 +135,15 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
         while (diff_angle < -180.0f) diff_angle += 360.0f;
 
         // --- SÉPARATION DES ZONES DYNAMIQUE ---
-        // Si le point est devant nous ET n'est PAS un mur (pour pouvoir longer les bordures)
-        if (diff_angle > -35.0f && diff_angle < 35.0f && !is_border) {
-            // Zone Tactique : Mouvement fluide
+        // --- CORRECTION MAJEURE 2 : Élargissement du cône ---
+        // Le cône passe de 35° à 65° pour ne pas "perdre de vue" l'obstacle pendant qu'on le contourne.
+        if (diff_angle > -65.0f && diff_angle < 65.0f && !is_border) {
             if (d < min_front_dist) {
-                min_front_dist = d;
+                min_front_dist = d; // Peut descendre sous d_min, c'est normal !
                 front_angle = angle_rad; 
                 front_found = true;
             }
         } else {
-            // Zone de Survie (Bouclier) : Partout ailleurs OU sur les murs !
             if (d < min_blind_dist) {
                 min_blind_dist = d;
                 blind_angle = angle_rad;
@@ -147,6 +157,8 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
 
     // 2. CALCUL DE LA FORCE AVANT
     if (front_found) {
+        // Grâce à la disparition du "continue", si un obstacle s'approche à 50mm, 
+        // penetration dépassera 1.0, mais la ligne ci-dessous (1.2f) la bloquera proprement au maximum !
         float penetration = (d_max - min_front_dist) / (d_max - d_min);
         if (penetration < 0.0f) penetration = 0.0f;
         if (penetration > 1.2f) penetration = 1.2f; 
@@ -162,7 +174,7 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
         sum_vy += force_mag * (r_y + LATERAL_GAIN * t_y);
     }
 
-    // 3. CALCUL DU BOUCLIER 360° (Agit désormais aussi sur les murs !)
+    // 3. CALCUL DU BOUCLIER 360°
     if (blind_found) {
         float penetration = (shield_max - min_blind_dist) / (shield_max - d_min);
         if (penetration < 0.0f) penetration = 0.0f;
@@ -182,7 +194,7 @@ void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angl
     // FILTRE LISSAGE EXPONENTIEL
     static float filtered_vx = 0.0f;
     static float filtered_vy = 0.0f;
-    const float ALPHA = 0.3f; 
+    const float ALPHA = 0.8f; // Astuce: Si le robot esquive de façon trop molle (retard), passe ça à 0.5 ou 0.6
 
     filtered_vx = ALPHA * sum_vx + (1.0f - ALPHA) * filtered_vx;
     filtered_vy = ALPHA * sum_vy + (1.0f - ALPHA) * filtered_vy;

@@ -14,13 +14,13 @@
 #define D_MIN           60.0f
 
 // 1. Paramètres du Cône Avant (Tactique)
-#define D_MAX           160.0f
-#define FORCE_MAX       300.0f 
-#define LATERAL_GAIN    1.0f 
+#define D_MAX           450.0f
+#define FORCE_MAX       700.0f 
+#define LATERAL_GAIN    1.5f 
 
 // 2. Paramètres du Bouclier Angles Morts (Survie)
-#define SHIELD_MAX      100.0f
-#define FORCE_SHIELD    400.0f
+#define SHIELD_MAX      200.0f
+#define FORCE_SHIELD    900.0f
 
 #define MIN_CLUSTER_PTS 5
 #define CLUSTER_TOLERANCE 75.0f
