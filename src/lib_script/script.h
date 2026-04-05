@@ -2,7 +2,7 @@
 #define LIB_SCRIPT_H
 
 #define START_MATCH_DELAY 10000 // 10 secondes après le démarrage du robot
-
+#define ENDGAME_TIME 30000 // 30 secondes après le démarrage du robot
 
 // Function declarations
 void script_init(void);
