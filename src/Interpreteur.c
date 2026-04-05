@@ -33,6 +33,9 @@ const Command Command_List[] = {
     { "SETPATHFINDING", Set_Pathfinding_parameters_Cmd},
     { "GETPATHFINDING", Get_Pathfinding_parameters_Cmd},
 
+    { "SETID", Config_Register_Cmd},
+    { "GETID", Get_Config_Cmd},
+
     { "VMAX", VMAX_Cmd},
     { "VTMAX", VTMAX_Cmd},
     { "AMAX", AMAX_Cmd},

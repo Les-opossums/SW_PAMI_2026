@@ -17,9 +17,12 @@
 #include "hardware/irq.h"
 #include "hardware/dma.h"
 #include "hardware/adc.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
 
 
 #include "PAMI_2026_IO.h"
+#include "PAMI_Config.h"
 
 #include "Timer.h"
 #include "Interpreteur.h"

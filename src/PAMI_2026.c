@@ -114,6 +114,10 @@ float ease_out_cubic(float t) {
 LD19Instance LD19;
 
 void core1_entry() {
+    // Autorise le Core 0 à mettre ce Core 1 en pause pendant l'écriture Flash (uniquement quand on set l'ID)
+    multicore_lockout_victim_init();
+
+
     LIDAR_UART_init();
     LD19_init(&LD19);
     LD19_enableFiltering(&LD19);
@@ -123,6 +127,8 @@ void core1_entry() {
     LD19_addBlindSpot(&LD19, 60.0f, 12.0f);
     LD19_addBlindSpot(&LD19, 180.0f, 12.0f);
     LD19_addBlindSpot(&LD19, 240.0f, 12.0f);
+
+    printf("LIDAR thread started on Core 1\n");
 
     while(1){
         LD19_readScan(&LD19, UART_ID);
@@ -138,6 +144,8 @@ int main()
     stdio_init_all();
     sleep_ms(2000); // wait for stdio to be ready
 
+    Config_Load(); // Load configuration from Flash (ID, etc.)
+    
     // 2. Initialize Screen (Feature/Screen)
     gc9a01a_t tft;
     gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);

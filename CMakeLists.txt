@@ -70,6 +70,8 @@ target_link_libraries(PAMI_2026
                         hardware_dma
                         hardware_gpio
                         hardware_adc
+                        hardware_flash
+                        hardware_sync
                         pico_multicore
                         pico_sync            
                         hardware_spi            
