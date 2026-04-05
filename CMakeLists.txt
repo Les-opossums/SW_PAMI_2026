@@ -42,6 +42,7 @@ file(GLOB SRC_SCREEN src/lib_screen/*.c)
 file(GLOB SRC_PATHFINDING src/lib_avoid_obstacle/*.c)
 file(GLOB SRC_WS2812 src/lib_ws2812/*.c)
 file(GLOB SRC_WIFI src/lib_wifi/*.c)
+file(GLOB SRC_SCRIPT src/lib_script/*.c)
 
 add_executable(PAMI_2026 
                 ${SRC_FILES} 
@@ -51,7 +52,8 @@ add_executable(PAMI_2026
                 ${SRC_SCREEN} 
                 ${SRC_PATHFINDING} 
                 ${SRC_WS2812} 
-                ${SRC_WIFI})
+                ${SRC_WIFI}
+                ${SRC_SCRIPT})
 
 pico_set_program_name(PAMI_2026 "PAMI_2026")
 pico_set_program_version(PAMI_2026 "0.1")

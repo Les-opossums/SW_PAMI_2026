@@ -115,7 +115,7 @@ void IHM_get_leash_state(void) {
             IHM.leash_state = current_raw;
             IHM.interaction_detected = true;
 
-            if(!IHM.leash_state) {
+            if(IHM.leash_state) {
                 IHM.start_match = 1;    
                 IHM.match_started_once = true;
                 printf("LEASH ACTIVATED\n");

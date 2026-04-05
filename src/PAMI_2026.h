@@ -45,6 +45,9 @@
 #include "Asserv_Loop.h"
 #include "Cmd_For_Move.h"
 
+// include for script match
+#include "lib_script/script.h"
+
 // include IHM
 #include "IHM.h"
 

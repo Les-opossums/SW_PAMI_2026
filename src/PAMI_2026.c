@@ -25,12 +25,6 @@ uint32_t last_batteries_update_time = 0;
 uint32_t last_interaction_time = 0;
 uint32_t last_startup_draw_time = 0;
 
-int match_state = 0;
-int timer_match = 0;
-int timer_match_delay = 85000; // 85 secondes (Coupe de France)
-int timer_match_delay_endgame = 100000; 
-Position Goal_Pos;
-
 // ==========================================
 // --- Lidar TCP & Telemetry ---
 // ==========================================
@@ -364,7 +358,7 @@ int main()
             }
             case 4: {
                 if(IHM.au_state == 1){
-                    script_match(); 
+                    script_loop();
                 }
                 sequencer++;
                 break;
@@ -393,34 +387,4 @@ uint8_t FREQ_Cmd(void) {
     }
     freq_robot_data_update = (int)val32;
     return 0;
-}
-
-void script_match(void) {
-    switch (match_state) {
-        case 0:
-            if (IHM.start_match) match_state++;
-            break;
-        case 1:
-            Goal_Pos.x = 0.5;
-            Goal_Pos.y = 1.0;
-            Goal_Pos.t = 1.5708; 
-            motion_pos(Goal_Pos);
-            match_state++; 
-            break;
-        case 2:
-            if (motion_done == 1) match_state++;
-            break;
-        case 3:
-            Goal_Pos.x = 0.5;
-            Goal_Pos.y = 0.2;
-            Goal_Pos.t = 1.5708;
-            motion_pos(Goal_Pos);
-            match_state++;
-            break;
-        case 4:
-            if (motion_done == 1) match_state = 1;
-            break;
-        default:
-            break;
-    }
 }
