@@ -45,6 +45,9 @@
 #include "Asserv_Loop.h"
 #include "Cmd_For_Move.h"
 
+// include IHM
+#include "IHM.h"
+
 // include for pathfinding
 #include "lib_avoid_obstacle/pathfinding.h"
 

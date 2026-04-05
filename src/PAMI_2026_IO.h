@@ -18,6 +18,10 @@
 
 #define TEAM_PIN 10
 
+// ADC for battery voltage reading
+#define ADC_VBAT_CHANNEL 0
+#define ADC_VBAT_PIN 26
+
 
 // Pin configuration
 #define LCD_CS_PIN 21

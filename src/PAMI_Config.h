@@ -5,7 +5,6 @@
 typedef struct {
     uint32_t magic_number; // Pour vérifier si la flash a été initialisée
     uint8_t pami_id;       // Ton ID de 1 à 6
-    uint8_t team_color;    // Optionnel : Bleu/Jaune stocké aussi ?
     uint16_t reserved;     // Padding pour alignement
 } PAMI_Global_Config;
 

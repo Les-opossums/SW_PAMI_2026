@@ -12,11 +12,6 @@
 #define MAX_PUPIL_DIST 35  // How far the eye can look from center
 #define BLINK_CLOSE_Y 110  // How far eyelids close (120 = fully closed)
 
-// Pin configuration
-#define LCD_CS_PIN 21
-#define LCD_DC_PIN 20
-#define LCD_RST_PIN 22 // Use -1 if you skip the reset pin
-
 // ==========================================
 // --- Global Variables ---
 // ==========================================
@@ -131,14 +126,20 @@ int main()
     // 1. Initialize standard I/O & Config
     stdio_init_all();
     sleep_ms(2000); 
+
+    // 2. Load Config from Flash (ID, etc.)
     Config_Load(); 
 
-    // 2. Initialize Hardware & Peripherals
-    Init_All();
+    // 3. Initialize Hardware & Peripherals
+    init_motors();
+    Init_Asserv();
+
+    IHM_init();
+    
     init_pathfinding_parameters();
     Fusion_Init(0.2f, 0.2f, 1.5f); // init x y theta
 
-    // 3. Initialize Screen
+    // 4. Initialize Screen
     gc9a01a_t tft;
     gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
     gc9a01a_begin(&tft); 
@@ -227,44 +228,18 @@ int main()
     while (true) {
         Timer_Update();
         uint32_t current_time = Timer_ms1; 
-        bool interaction_detected = false;
 
-        // --- LECTURE DES GPIO ---
-        bool current_leash_state = gpio_get(LEASH_PIN);
-        if (current_leash_state != last_leash_state) {
-            printf("LEASH : %s\n", current_leash_state ? "ACTIVE" : "INACTIVE");
-            if(current_leash_state) {
-                start_match = 1;
-                match_has_started_once = true; // VERROU DÉFINITIF POUR L'ÉCRAN
-                printf("MATCH STARTED\n");
-            } else {
-                start_match = 0; 
-            }
-            interaction_detected = true;
-            last_leash_state = current_leash_state;
-        }
-
-        bool current_team_state = gpio_get(TEAM_PIN);
-        if (current_team_state != last_team_state) {
-            team_state = current_team_state ? 0 : 1;
-            interaction_detected = true;
-            last_team_state = current_team_state;
-        }
-
-        bool current_au_state = gpio_get(AU_PIN);
-        if (current_au_state != last_au_state) {
-            printf("AU : %d\n", current_au_state);
-            interaction_detected = true;
-            last_au_state = current_au_state;
-        }
-
+        // --- GESTION DES BOUTONS & INTERACTIONS ---
+        IHM_get_AU_state();
+        IHM_get_team_state();
+        IHM_get_leash_state();
         // Si une interaction a eu lieu, on réarme le compteur de 20s
-        if (interaction_detected && !match_has_started_once) {
+        if (IHM.interaction_detected && !IHM.match_started_once) {
             last_interaction_time = current_time;
         }
 
         // Sécurité Arrêt d'Urgence
-        if (!current_au_state){
+        if (!IHM.au_state) {
             motion_free();
             for (int i = 0; i < 3; i++) gpio_put(11, 1); 
         }
@@ -275,9 +250,7 @@ int main()
 
         // --- GESTION DE LA BATTERIE (Toutes les 1s) ---
         if (current_time - last_batteries_update_time >= 1000) {
-            adc_select_input(0);
-            adc_val = (float)adc_read();
-            current_vbat = (adc_val / 4095.0f) * 9.9f;
+            IHM_get_battery_voltage();
 
             // Envoi TCP
             if (tcp_state && tcp_state->is_connected && tcp_state->can_send) {
@@ -291,7 +264,7 @@ int main()
         }
 
         // --- GESTION DE L'ÉCRAN ---
-        if (match_has_started_once) {
+        if (IHM.match_started_once) {
             // MATCH COMMENCÉ : Toujours le minion
             minion_eye_update_non_blocking();
         } 
@@ -306,8 +279,8 @@ int main()
                                     actual_now.x * 1000.0f, // Conversion en mm
                                     actual_now.y * 1000.0f, 
                                     actual_now.theta, 
-                                    team_state,
-                                    !current_au_state, // Affiche l'état d'urgence (rouge si AU actif)
+                                    IHM.team_state,
+                                    !IHM.au_state, // Affiche l'état d'urgence (rouge si AU actif)
                                     wifi_connected, // Affiche l'état du Wi-Fi 
                                     0); 
                 last_startup_draw_time = current_time;
@@ -330,7 +303,7 @@ int main()
                 break;
             }
             case 1: {
-                if (current_au_state == 1) { 
+                if (IHM.au_state == 1) { 
                     Asserv_Loop();
                 }
                 sequencer++;
@@ -382,8 +355,8 @@ int main()
                 static int current_led_state = -1; 
                 int desired_led_state = 0;
 
-                if (current_au_state == 0) desired_led_state = 0; // AU -> Rouge
-                else if (team_state == 0) desired_led_state = 1;  // BLUE
+                if (IHM.au_state == 0) desired_led_state = 0; // AU -> Rouge
+                else if (IHM.team_state == 0) desired_led_state = 1;  // BLUE
                 else desired_led_state = 2;                       // YELLOW
 
                 if (desired_led_state != current_led_state) {
@@ -396,7 +369,7 @@ int main()
                 break;
             }
             case 4: {
-                if(current_au_state == 1){
+                if(IHM.au_state == 1){
                     script_match(); 
                 }
                 sequencer++;
@@ -418,24 +391,6 @@ int main()
 // ==========================================
 // --- Additional Functions ---
 // ==========================================
-void Init_All(void)
-{
-    init_motors();
-    Init_Asserv();
-
-    gpio_init(LEASH_PIN);
-    gpio_set_dir(LEASH_PIN, GPIO_IN);
-
-    gpio_init(AU_PIN);
-    gpio_set_dir(AU_PIN, GPIO_IN);
-    gpio_pull_up(AU_PIN); // Ajouté depuis ton code d'origine
-
-    gpio_init(TEAM_PIN);
-    gpio_set_dir(TEAM_PIN, GPIO_IN);
-
-    adc_init();
-    adc_gpio_init(26);
-}
 
 uint8_t FREQ_Cmd(void) {
     uint32_t val32;
@@ -449,7 +404,7 @@ uint8_t FREQ_Cmd(void) {
 void script_match(void) {
     switch (match_state) {
         case 0:
-            if (start_match) match_state++;
+            if (IHM.start_match) match_state++;
             break;
         case 1:
             Goal_Pos.x = 0.5;
