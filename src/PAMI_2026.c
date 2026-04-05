@@ -4,6 +4,8 @@
 #define M_TWO_PI 6.28318530717958647692f
 #endif
 
+// #define DEBUG_TIMING_CORE1 
+// #define DEBUG_TIMING_CORE0
 // ==========================================
 // --- Configuration SCREEN (Feature/Screen) ---
 // ==========================================
@@ -173,24 +175,26 @@ void core1_entry() {
             }
         }
 
-        // [PROFILAGE CORE 1] Fin du chrono
-        uint32_t loop_end_us = time_us_32();
-        uint32_t current_loop_time = loop_end_us - loop_start_us;
+        #ifdef DEBUG_TIMING_CORE1
+            // [PROFILAGE CORE 1] Fin du chrono
+            uint32_t loop_end_us = time_us_32();
+            uint32_t current_loop_time = loop_end_us - loop_start_us;
 
-        if (current_loop_time > loop_time_max_us) loop_time_max_us = current_loop_time;
-        loop_time_sum_us += current_loop_time;
-        loop_count++;
+            if (current_loop_time > loop_time_max_us) loop_time_max_us = current_loop_time;
+            loop_time_sum_us += current_loop_time;
+            loop_count++;
 
-        uint32_t current_time = time_us_32() / 1000;
-        if (current_time - profilage_start_timer >= 1000) {
-            if (loop_count > 0) {
-                uint32_t loop_time_avg_us = loop_time_sum_us / loop_count;
-                printf("[CPU Core 1] Freq: %lu boucles/sec | Boucle (moy): %lu us | Boucle (max): %lu us\n", 
-                       loop_count, loop_time_avg_us, loop_time_max_us);
+            uint32_t current_time = time_us_32() / 1000;
+            if (current_time - profilage_start_timer >= 1000) {
+                if (loop_count > 0) {
+                    uint32_t loop_time_avg_us = loop_time_sum_us / loop_count;
+                    printf("[CPU Core 1] Freq: %lu boucles/sec | Boucle (moy): %lu us | Boucle (max): %lu us\n", 
+                        loop_count, loop_time_avg_us, loop_time_max_us);
+                }
+                loop_time_max_us = 0; loop_time_sum_us = 0; loop_count = 0;
+                profilage_start_timer = current_time;
             }
-            loop_time_max_us = 0; loop_time_sum_us = 0; loop_count = 0;
-            profilage_start_timer = current_time;
-        }
+        #endif
     }
 }
 
@@ -423,23 +427,25 @@ int main()
                 break;
         }
 
-        // [PROFILAGE CORE 0]
-        uint32_t loop_end_us = time_us_32();
-        uint32_t current_loop_time = loop_end_us - loop_start_us;
+        #ifdef DEBUG_TIMING_CORE0
+            // [PROFILAGE CORE 0]
+            uint32_t loop_end_us = time_us_32();
+            uint32_t current_loop_time = loop_end_us - loop_start_us;
 
-        if (current_loop_time > loop_time_max_us) loop_time_max_us = current_loop_time;
-        loop_time_sum_us += current_loop_time;
-        loop_count++;
+            if (current_loop_time > loop_time_max_us) loop_time_max_us = current_loop_time;
+            loop_time_sum_us += current_loop_time;
+            loop_count++;
 
-        if (current_time - profilage_start_timer >= 1000) {
-            if (loop_count > 0) {
-                uint32_t loop_time_avg_us = loop_time_sum_us / loop_count;
-                printf("[CPU Core 0] Freq: %lu boucles/sec | Boucle (moy): %lu us | Boucle (max): %lu us\n", 
-                       loop_count, loop_time_avg_us, loop_time_max_us);
+            if (current_time - profilage_start_timer >= 1000) {
+                if (loop_count > 0) {
+                    uint32_t loop_time_avg_us = loop_time_sum_us / loop_count;
+                    printf("[CPU Core 0] Freq: %lu boucles/sec | Boucle (moy): %lu us | Boucle (max): %lu us\n", 
+                        loop_count, loop_time_avg_us, loop_time_max_us);
+                }
+                loop_time_max_us = 0; loop_time_sum_us = 0; loop_count = 0;
+                profilage_start_timer = current_time;
             }
-            loop_time_max_us = 0; loop_time_sum_us = 0; loop_count = 0;
-            profilage_start_timer = current_time;
-        }
+        #endif
     }
     return 0;
 }
