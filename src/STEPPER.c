@@ -21,6 +21,10 @@ void init_motors() {
     gpio_set_dir(13, GPIO_OUT);
     gpio_put(13, 1);
 
+    gpio_init(11);
+    gpio_set_dir(11, GPIO_OUT);
+    gpio_put(11, 1);
+
     for (int i = 0; i < NUM_MOTORS; i++) {
         gpio_init(motors[i].pins.step_pin);
         gpio_set_dir(motors[i].pins.step_pin, GPIO_OUT);
@@ -103,8 +107,10 @@ void Move_Stepper(int32_t delay_1, int32_t delay_2, int32_t delay_3){
 
     if(motors[0].enabled == true || motors[1].enabled == true || motors[2].enabled == true){
         gpio_put(13, 0); // Enable power to stepper drivers
+        gpio_put(11, 0);
     } else {
         gpio_put(13, 1); // Disable power to stepper drivers
+        gpio_put(11, 1);
     }
 
 }

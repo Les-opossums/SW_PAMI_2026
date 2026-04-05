@@ -73,7 +73,7 @@
 #define sizetab(a) (sizeof(a)/sizeof(a[0]))
 
 
-#define ROBOT_ID 1
+#define ROBOT_ID 2
 
 extern int lidar_loc_en;
 

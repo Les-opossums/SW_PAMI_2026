@@ -66,7 +66,7 @@ static void limit_magnitude(float* x, float* y, float max_val) {
 #define VFH_ROBOT_RADIUS 75.0f         // Rayon physique de ton robot (en mm)
 #define VFH_MARGIN 35.0f               // Marge de sécurité autour du robot (en mm)
 #define VFH_MAX_OBSTACLE_DIST 350.0f   // Distance au-delà de laquelle on ignore les obstacles (mm)
-#define VFH_MIN_OBSTACLE_DIST 70.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
+#define VFH_MIN_OBSTACLE_DIST 80.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
 
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan, float desired_speed) {
     VelocityCommand cmd = {0.0f, 0.0f, 0.0f, false};
@@ -75,11 +75,6 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
     float dx_global = current_goal.x - current_pose.x;
     float dy_global = current_goal.y - current_pose.y;
     float distance_to_goal = sqrtf(dx_global*dx_global + dy_global*dy_global);
-
-    if (distance_to_goal < PF_GOAL_TOLERANCE) {
-        cmd.reached = true;
-        return cmd;
-    }
 
     // 2. Passage de la cible dans le repère local du robot
     float cos_theta = cosf(current_pose.theta);
@@ -98,21 +93,47 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
     bool blocked_sectors[VFH_SECTORS] = {false};
     float safe_distance = VFH_ROBOT_RADIUS + VFH_MARGIN;
 
+    // --- ZONES MORTES (ENTRETOISES) ---
+    // Angles des entretoises à masquer (en degrés)
+    const float BLIND_SPOT_1 = 60.0f;
+    const float BLIND_SPOT_2 = 180.0f;
+    const float BLIND_SPOT_3 = 240.0f; // (A vérifier si ce n'est pas 300° selon ta CAO)
+    
+    // Tolérance : On ignore tous les points à +/- 12° autour de l'entretoise
+    const float BLIND_SPOT_TOLERANCE = 12.0f; 
+
     if (scan != NULL && scan->index > 0) {
         for (int i = 0; i < scan->index; i++) {
             float d = scan->points[i].distance;
             float angle_deg = scan->points[i].angle;
 
+            // 1. Normalisation de l'angle strictement entre 0 et 360°
+            float a = angle_deg;
+            while (a < 0.0f) a += 360.0f;
+            while (a >= 360.0f) a -= 360.0f;
+
+            // 2. FILTRAGE DES ENTRETOISES
+            bool is_blind_spot = false;
+            // Comme les angles sont loin de 0/360, un simple fabsf() suffit pour tester l'écart
+            if (fabsf(a - BLIND_SPOT_1) < BLIND_SPOT_TOLERANCE ||
+                fabsf(a - BLIND_SPOT_2) < BLIND_SPOT_TOLERANCE ||
+                fabsf(a - BLIND_SPOT_3) < BLIND_SPOT_TOLERANCE) {
+                is_blind_spot = true;
+            }
+
+            // Si le point tape dans l'entretoise ou un fantôme, on le supprime (on passe au suivant)
+            if (is_blind_spot) {
+                continue; 
+            }
+
+            // 3. Suite du code normal VFH
             float diff_to_target = fabsf(angle_deg - target_angle_deg);
             if (diff_to_target > 180.0f) diff_to_target = 360.0f - diff_to_target;
 
-            // CORRECTIF ICI : On ajoute d > VFH_MIN_OBSTACLE_DIST
+            // On applique le filtre de distance globale (VFH_MIN et VFH_MAX) + Cône avant
             if (d > VFH_MIN_OBSTACLE_DIST && d < VFH_MAX_OBSTACLE_DIST && diff_to_target < 100.0f) {
                 
-                while (angle_deg < 0.0f) angle_deg += 360.0f;
-                while (angle_deg >= 360.0f) angle_deg -= 360.0f;
-
-                int center_sector = (int)(angle_deg / (360.0f / VFH_SECTORS)) % VFH_SECTORS;
+                int center_sector = (int)(a / (360.0f / VFH_SECTORS)) % VFH_SECTORS;
 
                 // Limitation du ratio pour éviter l'effet "mur plat" de très près
                 float ratio = safe_distance / d;
