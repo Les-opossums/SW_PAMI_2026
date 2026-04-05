@@ -143,14 +143,30 @@ int main()
     gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
     gc9a01a_begin(&tft); 
     minion_eye_init(&tft);
+
+    // --- Variables d'état GPIO ---
+    bool last_leash_state = gpio_get(LEASH_PIN);
+    bool last_au_state    = gpio_get(AU_PIN);
+    bool last_team_state  = gpio_get(TEAM_PIN);
+    
+    bool team_state = last_team_state; // 0 = BLUE, 1 = YELLOW
+    bool au_state   = last_au_state;   // 0 = normal mode, 1 = AU mode
+
+    RobotPose pose_init = Fusion_GetState();
+
+    adc_select_input(0);
+    float adc_val = (float)adc_read();
+    current_vbat = (adc_val / 4095.0f) * 9.9f;
+
+     // Affiche l'écran de démarrage tant que le match n'a pas commencé
     startup_screen_show(&tft, 
                         current_config.pami_id, 
-                        0.0f,
-                        0.0f, 
-                        0.0f, 
-                        0.0f, 
-                        0, 
-                        false, 
+                        current_vbat,
+                        pose_init.x,
+                        pose_init.y, 
+                        pose_init.theta, 
+                        team_state, 
+                        !au_state, 
                         false,
                         0); // Écran de démarrage initial
 
@@ -164,7 +180,8 @@ int main()
         printf("\nRecherche de réseaux Wi-Fi...\n");
 
         for (int i = 0; i < num_wifi_networks; i++) {
-            if (cyw43_arch_wifi_connect_timeout_ms(wifi_networks[i].ssid, wifi_networks[i].password, CYW43_AUTH_WPA2_AES_PSK, 10000) == 0) {
+            if ( 
+                (wifi_networks[i].ssid, wifi_networks[i].password, CYW43_AUTH_WPA2_AES_PSK, 10000) == 0) {
                 printf(">> Wi-Fi connecté à '%s' !\n", wifi_networks[i].ssid);
                 wifi_connected = true;
                 break; 
@@ -178,14 +195,6 @@ int main()
     if (wifi_connected) {
         tcp_state = tcp_server_open();
     }
-
-    // --- Variables d'état GPIO ---
-    bool last_leash_state = gpio_get(LEASH_PIN);
-    bool last_au_state    = gpio_get(AU_PIN);
-    bool last_team_state  = gpio_get(TEAM_PIN);
-    
-    bool team_state = last_team_state; // 0 = BLUE, 1 = YELLOW
-    bool au_state   = last_au_state;   // 0 = normal mode, 1 = AU mode
 
     led_rgb_init();
     Path_Init();
@@ -254,7 +263,7 @@ int main()
         // --- GESTION DE LA BATTERIE (Toutes les 1s) ---
         if (current_time - last_batteries_update_time >= 1000) {
             adc_select_input(0);
-            float adc_val = (float)adc_read();
+            adc_val = (float)adc_read();
             current_vbat = (adc_val / 4095.0f) * 9.9f;
 
             // Envoi TCP
