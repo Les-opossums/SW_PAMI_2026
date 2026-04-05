@@ -19,4 +19,9 @@
 #define TEAM_PIN 10
 
 
+// Pin configuration
+#define LCD_CS_PIN 21
+#define LCD_DC_PIN 20
+#define LCD_RST_PIN 22 // Use -1 if you skip the reset pin
+
 #endif // PAMI_2026_IO_H
