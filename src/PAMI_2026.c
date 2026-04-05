@@ -369,10 +369,7 @@ int main()
                 break;
             }
             case 4: {
-                // La stratégie globale / scénario de match
-                if(IHM.au_state == 1){
-                    script_loop(); 
-                }
+                script_loop(); 
                 sequencer++;
                 break;
             }
