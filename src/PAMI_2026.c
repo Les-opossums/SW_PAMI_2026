@@ -21,10 +21,6 @@ int freq_robot_data_update = 20; // Hz
 uint32_t last_robot_data_update_time = 0;
 
 uint32_t last_batteries_update_time = 0;
-float current_vbat = 0.0f; // Rendu global pour affichage écran et envoi TCP
-
-int start_match = 0; // 1 = Match en cours
-bool match_has_started_once = false; // Latch (verrou) pour l'affichage de l'écran
 
 uint32_t last_interaction_time = 0;
 uint32_t last_startup_draw_time = 0;
@@ -155,14 +151,12 @@ int main()
 
     RobotPose pose_init = Fusion_GetState();
 
-    adc_select_input(0);
-    float adc_val = (float)adc_read();
-    current_vbat = (adc_val / 4095.0f) * 9.9f;
+    IHM_get_battery_voltage(); // Lecture initiale de la batterie pour affichage dès le départ
 
      // Affiche l'écran de démarrage tant que le match n'a pas commencé
     startup_screen_show(&tft, 
                         current_config.pami_id, 
-                        current_vbat,
+                        IHM.current_vbat,
                         pose_init.x,
                         pose_init.y, 
                         pose_init.theta, 
@@ -236,6 +230,7 @@ int main()
         // Si une interaction a eu lieu, on réarme le compteur de 20s
         if (IHM.interaction_detected && !IHM.match_started_once) {
             last_interaction_time = current_time;
+            IHM.interaction_detected = false;
         }
 
         // Sécurité Arrêt d'Urgence
@@ -255,7 +250,7 @@ int main()
             // Envoi TCP
             if (tcp_state && tcp_state->is_connected && tcp_state->can_send) {
                 char bat_msg[32];
-                snprintf(bat_msg, sizeof(bat_msg), "BAT:%.2f\n", (double)current_vbat);
+                snprintf(bat_msg, sizeof(bat_msg), "BAT:%.2f\n", (double)IHM.current_vbat);
                 char ws_buf[128];
                 uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), WEBSOCKET_OPCODE_TEXT, bat_msg, strlen(bat_msg), 0);
                 tcp_server_send_data(tcp_state, (uint8_t*)ws_buf, pack_len);
@@ -275,7 +270,7 @@ int main()
                 // 0 en dernier argument pour ne pas bloquer la boucle
                 startup_screen_show(&tft, 
                                     current_config.pami_id, // Affiche le véritable ID du robot
-                                    current_vbat, 
+                                    IHM.current_vbat, 
                                     actual_now.x,
                                     actual_now.y, 
                                     actual_now.theta, 
@@ -285,8 +280,7 @@ int main()
                                     0); 
                 last_startup_draw_time = current_time;
             }
-        } 
-        else {
+        } else {
             // REPOS (> 20s) : Animation minion
             minion_eye_update_non_blocking();
         }
