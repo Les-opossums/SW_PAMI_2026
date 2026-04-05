@@ -64,7 +64,7 @@ static void limit_magnitude(float* x, float* y, float max_val) {
 // =========================================================
 #define VFH_SECTORS 72                 // 360° divisé par 72 = 5° par secteur
 #define VFH_ROBOT_RADIUS 75.0f         // Rayon physique de ton robot (en mm)
-#define VFH_MARGIN 60.0f               // Marge de sécurité autour du robot (en mm)
+#define VFH_MARGIN 40.0f               // Marge de sécurité autour du robot (en mm)
 #define VFH_MAX_OBSTACLE_DIST 350.0f   // Distance au-delà de laquelle on ignore les obstacles (mm)
 #define VFH_MIN_OBSTACLE_DIST 80.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
 
@@ -207,23 +207,21 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
         float chosen_angle_deg = best_sector * (360.0f / VFH_SECTORS) + ((360.0f / VFH_SECTORS) / 2.0f);
         float chosen_angle_rad = chosen_angle_deg * M_PI / 180.0f;
 
-        // --- NOUVEAU : Calcul du ralentissement ---
-        float speed_factor = 1.0f; // 100% de la vitesse par défaut
+        // --- NOUVEAU : Ralentissement proportionnel à l'effort d'esquive ---
+        // On calcule de combien de degrés le robot a dû dévier par rapport à sa cible
+        float angle_deviation = fabsf(chosen_angle_deg - target_angle_deg);
+        if (angle_deviation > 180.0f) angle_deviation = 360.0f - angle_deviation;
         
-        if (min_front_dist < VFH_MAX_OBSTACLE_DIST) {
-            // Plus min_front_dist se rapproche de VFH_MIN_OBSTACLE_DIST, plus 'progress' tend vers 0
-            float range = VFH_MAX_OBSTACLE_DIST - VFH_MIN_OBSTACLE_DIST;
-            float progress = (min_front_dist - VFH_MIN_OBSTACLE_DIST) / range;
-            
-            // On descend doucement jusqu'à 25% de la vitesse quand on frôle l'obstacle
-            speed_factor = 0.25f + (0.75f * progress); 
-            
-            // Sécurités
-            if (speed_factor < 0.2f) speed_factor = 0.2f; // Ne jamais descendre sous 20% sinon il n'avance plus
-            if (speed_factor > 1.0f) speed_factor = 1.0f;
-        }
+        // Calcul du facteur de vitesse (0.3 à 1.0)
+        // 0° de déviation = 100% de la vitesse
+        // 90° de déviation = 30% de la vitesse
+        float speed_factor = 1.0f - (angle_deviation / 90.0f) * 0.7f;
+        
+        // Sécurités pour ne jamais reculer ni s'arrêter complètement
+        if (speed_factor < 0.3f) speed_factor = 0.3f; 
+        if (speed_factor > 1.0f) speed_factor = 1.0f;
 
-        // On applique ce pourcentage à TA consigne de vitesse optimale
+        // Application de la vitesse
         float final_speed = desired_speed * speed_factor;
 
         raw_vx = final_speed * cosf(chosen_angle_rad);
