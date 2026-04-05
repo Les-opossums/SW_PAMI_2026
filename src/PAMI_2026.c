@@ -135,7 +135,7 @@ int main()
     Init_Asserv();
 
     IHM_init();
-    
+
     init_pathfinding_parameters();
     Fusion_Init(0.2f, 0.2f, 1.5f); // init x y theta
 
@@ -276,8 +276,8 @@ int main()
                 startup_screen_show(&tft, 
                                     current_config.pami_id, // Affiche le véritable ID du robot
                                     current_vbat, 
-                                    actual_now.x * 1000.0f, // Conversion en mm
-                                    actual_now.y * 1000.0f, 
+                                    actual_now.x,
+                                    actual_now.y, 
                                     actual_now.theta, 
                                     IHM.team_state,
                                     !IHM.au_state, // Affiche l'état d'urgence (rouge si AU actif)

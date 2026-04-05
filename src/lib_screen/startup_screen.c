@@ -330,8 +330,8 @@ static void sc_draw_battery(uint16_t *buf, float voltage, int cx, int y)
  * @param tft           Pointeur vers le driver GC9A01A (déjà initialisé)
  * @param robot_id      ID du robot (0–255), affiché en grand
  * @param bat_voltage   Tension batterie en volts (ex: 7.6f)
- * @param pos_x_mm      Position X Lidar en millimètres
- * @param pos_y_mm      Position Y Lidar en millimètres
+ * @param pos_x_m     Position X Lidar en mètres (ex: 0.12f pour 12 cm, -0.34f pour -34 cm)
+ * @param pos_y_m     Position Y Lidar en mètres (ex: 0.12f pour 12 cm, -0.34f pour -34 cm)
  * @param pos_theta_rad Angle θ en radians
  * @param team_color    0 = BLEU, 1 = JAUNE
  * @param emergency_stop true si arrêt d’urgence actif (affiche une alerte rouge)
@@ -341,8 +341,8 @@ static void sc_draw_battery(uint16_t *buf, float voltage, int cx, int y)
 void startup_screen_show(gc9a01a_t *tft,
                           uint8_t  robot_id,
                           float    bat_voltage,
-                          float    pos_x_mm,
-                          float    pos_y_mm,
+                          float    pos_x_m,
+                          float    pos_y_m,
                           float    pos_theta_rad,
                           uint8_t  team_color,
                           bool     emergency_stop,
@@ -377,8 +377,8 @@ void startup_screen_show(gc9a01a_t *tft,
     // ═════ POSITION ═════
     char line_x[20], line_y[20], line_t[20];
 
-    snprintf(line_x, sizeof(line_x), "X:%+.0f", (double)pos_x_mm);
-    snprintf(line_y, sizeof(line_y), "Y:%+.0f mm", (double)pos_y_mm);
+    snprintf(line_x, sizeof(line_x), "X:%+.2f m", (double)pos_x_m);
+    snprintf(line_y, sizeof(line_y), "Y:%+.2f m", (double)pos_y_m);
 
     float deg = pos_theta_rad * (180.0f / 3.14159265f);
     snprintf(line_t, sizeof(line_t), "T:%+.1f deg", (double)deg);
