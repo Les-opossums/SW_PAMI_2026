@@ -5,7 +5,6 @@
 #define ENDGAME_TIME 30000 // 30 secondes après le démarrage du robot
 
 // Function declarations
-void script_init(void);
 void script_loop(void);
 
 void script_match_1_loop(void);

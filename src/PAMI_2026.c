@@ -161,41 +161,31 @@ int main()
 
     sleep_ms(1000); 
 
-    // --- Initialisation du Wi-Fi ---
+    // --- Initialisation du Wi-Fi (ASYNCHRONE ET RETENTATIVES) ---
     bool wifi_initialized = false;
     bool wifi_connected = false;
+    int current_wifi_index = 0;
+    bool wifi_connection_in_progress = false;
+    
+    uint32_t wifi_start_time = 0;      // Pour le timeout de 10s d'un essai
+    uint32_t last_wifi_check_time = 0; // Pour ne pas interroger la puce à chaque microseconde
+    uint32_t last_wifi_retry_time = 0; // Pour la pause de 15s avant de recommencer toute la liste
 
     if (cyw43_arch_init() == 0) {
         wifi_initialized = true;
         cyw43_arch_enable_sta_mode();
         printf("\nRecherche de réseaux Wi-Fi...\n");
 
-        // Boucle sur tous les réseaux configurés dans wifi_credentials.h
-        for (int i = 0; i < num_wifi_networks; i++) {
-            printf("Essai %d/%d : Tentative de connexion a '%s'...\n", i + 1, num_wifi_networks, wifi_networks[i].ssid);
-            
-            // On tente la connexion (retourne 0 en cas de succès)
-            if (cyw43_arch_wifi_connect_timeout_ms(wifi_networks[i].ssid, wifi_networks[i].password, CYW43_AUTH_WPA2_AES_PSK, 10000) == 0) {
-                printf(">> Wi-Fi connecté avec succès à '%s' !\n", wifi_networks[i].ssid);
-                wifi_connected = true;
-                
-                // Vérification de l'IP appliquée
-                uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-                printf(">> Adresse IP : %d.%d.%d.%d\n", 
-                    ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
-                
-                break; // Le robot est connecté, on sort de la boucle !
-            } else {
-                printf("Échec de connexion à '%s'. On passe au suivant.\n", wifi_networks[i].ssid);
-            }
+        if (num_wifi_networks > 0) {
+            printf("Essai 1/%d : Tentative de connexion a '%s'...\n", num_wifi_networks, wifi_networks[0].ssid);
+            cyw43_arch_wifi_connect_async(wifi_networks[0].ssid, wifi_networks[0].password, CYW43_AUTH_WPA2_AES_PSK);
+            wifi_connection_in_progress = true;
+            wifi_start_time = time_us_32() / 1000;
+        } else {
+            printf("Aucun réseau configuré. Mode STANDALONE (pas de retentatives).\n");
         }
-        if (!wifi_connected) printf("\nAucun Wi-Fi trouvé. Mode STANDALONE.\n");
     } else {
-        printf("Échec init Wi-Fi. Mode STANDALONE.\n");
-    }
-
-    if (wifi_connected) {
-        tcp_state = tcp_server_open();
+        printf("Échec init Wi-Fi. Mode STANDALONE définitif.\n");
     }
 
     led_rgb_init();
@@ -231,10 +221,6 @@ int main()
         if (!IHM.au_state) {
             motion_free();
             for (int i = 0; i < 3; i++) gpio_put(11, 1); 
-        }
-
-        if (wifi_connected && tcp_state != NULL) {
-            cyw43_arch_poll();
         }
 
         // --- GESTION DE LA BATTERIE (Toutes les 1s) ---
@@ -358,13 +344,73 @@ int main()
             }
             case 4: {
                 if(IHM.au_state == 1){
-                    script_loop();
+                    script_loop(); 
                 }
                 sequencer++;
                 break;
             }
             case 5: {
-                if (wifi_initialized) cyw43_arch_poll();
+                if (wifi_initialized) {
+                    cyw43_arch_poll(); // Nécessaire pour maintenir la liaison asynchrone
+
+                    // On évalue l'état réseau toutes les 500 ms (pour ne pas saturer)
+                    if (current_time - last_wifi_check_time >= 500) {
+                        last_wifi_check_time = current_time;
+                        int link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+
+                        // --- ETAT 1 : TENTATIVE DE CONNEXION EN COURS ---
+                        if (wifi_connection_in_progress) {
+                            if (link_status == CYW43_LINK_UP) {
+                                printf(">> Wi-Fi connecté avec succès à '%s' !\n", wifi_networks[current_wifi_index].ssid);
+                                wifi_connected = true;
+                                wifi_connection_in_progress = false;
+                                
+                                uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
+                                printf(">> Adresse IP : %d.%d.%d.%d\n", 
+                                    ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+                                
+                                // On ouvre le TCP si ce n'est pas déjà fait
+                                if (tcp_state == NULL) {
+                                    tcp_state = tcp_server_open();
+                                }
+                            } 
+                            else if (link_status < 0 || (current_time - wifi_start_time > 10000)) {
+                                printf("Échec ou timeout (10s) pour '%s'.\n", wifi_networks[current_wifi_index].ssid);
+                                current_wifi_index++;
+                                
+                                if (current_wifi_index < num_wifi_networks) {
+                                    printf("Essai %d/%d : Tentative de connexion a '%s'...\n", 
+                                           current_wifi_index + 1, num_wifi_networks, wifi_networks[current_wifi_index].ssid);
+                                    cyw43_arch_wifi_connect_async(wifi_networks[current_wifi_index].ssid, wifi_networks[current_wifi_index].password, CYW43_AUTH_WPA2_AES_PSK);
+                                    wifi_start_time = current_time;
+                                } else {
+                                    printf("\nAucun Wi-Fi trouvé sur cette passe. Le robot passe en veille réseau.\n");
+                                    wifi_connection_in_progress = false;
+                                    last_wifi_retry_time = current_time; // Début de la période de repos
+                                }
+                            }
+                        } 
+                        // --- ETAT 2 : CONNECTÉ (Surveillance de coupure) ---
+                        else if (wifi_connected) {
+                            if (link_status != CYW43_LINK_UP) {
+                                printf("\n[ALERTE] Perte de la connexion Wi-Fi ! Passage en veille réseau.\n");
+                                wifi_connected = false;
+                                last_wifi_retry_time = current_time; // On attend avant de bourriner
+                            }
+                        } 
+                        // --- ETAT 3 : DÉCONNECTÉ ET EN PAUSE ---
+                        else {
+                            // On retente toute la liste des Wi-Fi toutes les 15 secondes
+                            if (current_time - last_wifi_retry_time > 15000 && num_wifi_networks > 0) {
+                                printf("\nNouvelle tentative de recherche de réseaux Wi-Fi...\n");
+                                current_wifi_index = 0;
+                                cyw43_arch_wifi_connect_async(wifi_networks[0].ssid, wifi_networks[0].password, CYW43_AUTH_WPA2_AES_PSK);
+                                wifi_connection_in_progress = true;
+                                wifi_start_time = current_time;
+                            }
+                        }
+                    }
+                }
                 sequencer++;
                 break;
             }

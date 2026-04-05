@@ -57,7 +57,7 @@ void script_match_1_loop(void){
             
         case 2:
             Goal_Pos.x = 0.5;
-            Goal_Pos.y = 1.0;
+            Goal_Pos.y = 0.2;
             Goal_Pos.t = 1.5708; 
             motion_pos(Goal_Pos);
             match_state++; 
@@ -72,7 +72,7 @@ void script_match_1_loop(void){
             
         case 4:
             Goal_Pos.x = 0.5;
-            Goal_Pos.y = 0.2;
+            Goal_Pos.y = 1.5;
             Goal_Pos.t = 1.5708; 
             motion_pos(Goal_Pos);
             match_state++; 
