@@ -252,6 +252,34 @@ static void sc_draw_id(uint16_t *buf, int id, uint16_t color)
     }
 }
 
+static void sc_draw_wifi(uint16_t *buf, int cx, int cy, bool connected)
+{
+    uint16_t col = connected ? SC_GREEN : SC_GRAY;
+    uint16_t sw = __builtin_bswap16(col);
+
+    for (int i = 0; i < 3; i++) {
+        int r = 4 + i * 5;   // 🔽 plus petit (avant 6 + i*6)
+        int thickness = 2;
+
+        for (int y = -r; y <= 0; y++) {
+            for (int x = -r; x <= r; x++) {
+                int d2 = x*x + y*y;
+
+                if (d2 <= r*r && d2 >= (r - thickness)*(r - thickness)) {
+                    int px = cx + x;
+                    int py = cy + y;
+
+                    if (px >= 0 && px < 240 && py >= 0 && py < 240) {
+                        buf[py * 240 + px] = sw;
+                    }
+                }
+            }
+        }
+    }
+
+    sc_fill_rect(buf, cx - 1, cy + 1, 3, 3, col); // 🔽 point plus petit
+}
+
 // ─── Jauge batterie ───────────────────────────────────────────────────────────
 // 2S LiPo : 6.0 V (vide) → 8.4 V (pleine)
 // Dessinée centrée sur cx
@@ -267,7 +295,7 @@ static void sc_draw_battery(uint16_t *buf, float voltage, int cx, int y)
     else                  bar_col = SC_RED;
 
     // ── Corps de la jauge ──
-    const int BW = 80, BH = 14; // Largeur et hauteur du corps
+    const int BW = 60, BH = 20; // Largeur et hauteur du corps
     const int NW = 5,  NH = 6;  // Embout positif (nub)
     const int PAD = 2;           // Padding intérieur
 
@@ -306,6 +334,8 @@ static void sc_draw_battery(uint16_t *buf, float voltage, int cx, int y)
  * @param pos_y_mm      Position Y Lidar en millimètres
  * @param pos_theta_rad Angle θ en radians
  * @param team_color    0 = BLEU, 1 = JAUNE
+ * @param emergency_stop true si arrêt d’urgence actif (affiche une alerte rouge)
+ * @param wifi_connected true si WiFi connecté (affiche l'icône en vert
  * @param duration_ms   Durée d'affichage (3000 ms recommandé)
  */
 void startup_screen_show(gc9a01a_t *tft,
@@ -315,87 +345,69 @@ void startup_screen_show(gc9a01a_t *tft,
                           float    pos_y_mm,
                           float    pos_theta_rad,
                           uint8_t  team_color,
+                          bool     emergency_stop,
+                          bool     wifi_connected,
                           uint32_t duration_ms)
 {
-    // Attente de la fin du DMA en cours
     while (gc9a01a_is_busy()) tight_loop_contents();
 
     uint16_t *buf = gc9a01a_draw_buffer;
 
-    // ── Couleurs selon l'équipe ──
     uint16_t col_team  = (team_color == 0) ? SC_BLUE   : SC_YELLOW;
     uint16_t col_dark  = (team_color == 0) ? SC_DKBLUE : SC_DKYELLOW;
-    const char *team_str = (team_color == 0) ? "EQUIPE BLEUE" : "EQUIPE JAUNE";
+    const char *team_str = (team_color == 0) ? "BLEU" : "JAUNE";
 
-    // ══════════════════════════════════════════════════════════════
-    // 1. FOND
-    // ══════════════════════════════════════════════════════════════
     gc9a01a_fill_screen(SC_BLACK);
 
-    // ══════════════════════════════════════════════════════════════
-    // 2. TITRE « PAMI 2026 »
-    //    Affiché en haut, petite police, gris clair
-    // ══════════════════════════════════════════════════════════════
-    sc_draw_str_centered(buf, 120, 13, "PAMI  2026", SC_GRAY, 1);
+    // HEADER
+    sc_draw_str_centered(buf, 120, 10, "PAMI 2026", SC_GRAY, 1);
 
-    // ══════════════════════════════════════════════════════════════
-    // 3. HALO COLORÉ derrière l'ID
-    //    Grand cercle sombre aux couleurs de l'équipe
-    // ══════════════════════════════════════════════════════════════
-    gc9a01a_fill_circle(buf, 120, 85, 72, col_dark);
-    // Anneau intérieur légèrement plus clair pour donner de la profondeur
-    gc9a01a_fill_circle(buf, 120, 85, 64, SC_BLACK);
-    gc9a01a_fill_circle(buf, 120, 85, 60, col_dark);
+    // ═════ ZONE ID ═════
+    sc_fill_rect(buf, 0, 30, 100, 120, col_dark);
 
-    // ══════════════════════════════════════════════════════════════
-    // 4. ID EN CHIFFRES 7 SEGMENTS
-    //    Grand, centré, couleur équipe
-    // ══════════════════════════════════════════════════════════════
-    sc_draw_id(buf, robot_id, col_team);
+    if (robot_id < 10) {
+        sc_draw_seg7(buf, 20, 50, robot_id, col_team, 60, 90, 8);
+    } else {
+        sc_draw_seg7(buf, 5, 55, robot_id / 10, col_team, 40, 70, 6);
+        sc_draw_seg7(buf, 50, 55, robot_id % 10, col_team, 40, 70, 6);
+    }
 
-    // ══════════════════════════════════════════════════════════════
-    // 5. NOM D'ÉQUIPE
-    //    Sous le chiffre, petite police, couleur équipe
-    // ══════════════════════════════════════════════════════════════
-    sc_draw_str_centered(buf, 120, 142, team_str, col_team, 1);
+    sc_draw_str_centered(buf, 50, 130, team_str, SC_WHITE, 1);
 
-    // ══════════════════════════════════════════════════════════════
-    // 6. SÉPARATEUR
-    // ══════════════════════════════════════════════════════════════
-    // Ligne centrale de la couleur de l'équipe
-    sc_hline(buf, 60, 155, 120, col_team);
-    // Lignes grises encadrantes
-    sc_hline(buf, 70, 153, 100, SC_GRAY);
-    sc_hline(buf, 70, 157, 100, SC_GRAY);
+    // ═════ POSITION ═════
+    char line_x[20], line_y[20], line_t[20];
 
-    // ══════════════════════════════════════════════════════════════
-    // 7. JAUGE BATTERIE
-    //    Corps centré + % + tension à droite
-    // ══════════════════════════════════════════════════════════════
-    sc_draw_battery(buf, bat_voltage, 120, 164);
+    snprintf(line_x, sizeof(line_x), "X:%+.0f", (double)pos_x_mm);
+    snprintf(line_y, sizeof(line_y), "Y:%+.0f mm", (double)pos_y_mm);
 
-    // ══════════════════════════════════════════════════════════════
-    // 8. POSITION LIDAR
-    //    X / Y en millimètres, θ en degrés
-    // ══════════════════════════════════════════════════════════════
-    char line_xy[28], line_t[22];
-    // Signe explicite avec %+.0f : "+1250" ou "-300"
-    snprintf(line_xy, sizeof(line_xy), "X:%+.0f  Y:%+.0f mm",
-             (double)pos_x_mm, (double)pos_y_mm);
     float deg = pos_theta_rad * (180.0f / 3.14159265f);
-    snprintf(line_t, sizeof(line_t), "T: %+.1f deg", (double)deg);
+    snprintf(line_t, sizeof(line_t), "T:%+.1f deg", (double)deg);
 
-    sc_draw_str_centered(buf, 120, 184, line_xy, SC_LGRAY, 1);
-    sc_draw_str_centered(buf, 120, 197, line_t,  SC_LGRAY, 1);
+    sc_draw_str_centered(buf, 170, 40, "POSITION", col_team, 1);
 
-    // ══════════════════════════════════════════════════════════════
-    // 9. ENVOI VIA DMA
-    // ══════════════════════════════════════════════════════════════
+    sc_draw_str_centered(buf, 170, 65, line_x, SC_WHITE, 2);
+    sc_draw_str_centered(buf, 170, 95, line_y, SC_WHITE, 2);
+    sc_draw_str_centered(buf, 170, 125, line_t, SC_WHITE, 2);
+
+    // ═════ SEPARATEUR ═════
+    sc_hline(buf, 10, 160, 220, SC_GRAY);
+
+    // ═════ ZONE BATTERIE ═════
+
+    // Fond alerte si arrêt d’urgence
+    if (emergency_stop) {
+        sc_fill_rect(buf, 0, 175, 240, 65, SC_RED);
+    }
+
+    // WiFi à droite
+    sc_draw_wifi(buf, 60, 205, wifi_connected);
+
+    // Batterie centrée un peu plus haut
+    sc_draw_battery(buf, bat_voltage, 150, 185);
+
+    // ═════ ENVOI ═════
     gc9a01a_update_async(tft);
 
-    // ══════════════════════════════════════════════════════════════
-    // 10. MAINTIEN + ATTENTE FIN DMA
-    // ══════════════════════════════════════════════════════════════
     sleep_ms(duration_ms);
     while (gc9a01a_is_busy()) tight_loop_contents();
 }

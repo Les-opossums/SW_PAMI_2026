@@ -143,6 +143,16 @@ int main()
     gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
     gc9a01a_begin(&tft); 
     minion_eye_init(&tft);
+    startup_screen_show(&tft, 
+                        current_config.pami_id, 
+                        0.0f,
+                        0.0f, 
+                        0.0f, 
+                        0.0f, 
+                        0, 
+                        false, 
+                        false,
+                        0); // Écran de démarrage initial
 
     // --- Initialisation du Wi-Fi ---
     bool wifi_initialized = false;
@@ -274,7 +284,9 @@ int main()
                                     actual_now.x * 1000.0f, // Conversion en mm
                                     actual_now.y * 1000.0f, 
                                     actual_now.theta, 
-                                    team_state, 
+                                    team_state,
+                                    !current_au_state, // Affiche l'état d'urgence (rouge si AU actif)
+                                    wifi_connected, // Affiche l'état du Wi-Fi 
                                     0); 
                 last_startup_draw_time = current_time;
             }
