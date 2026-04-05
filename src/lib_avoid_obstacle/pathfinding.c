@@ -39,33 +39,6 @@ void init_pathfinding_parameters(void) {
     cluster_tolerance = CLUSTER_TOLERANCE;
 }
 
-// Fonction de filtrage pour éliminer le bruit (entretoises/reflets)
-static bool is_valid_obstacle(const LD19DataPointHandler* scan, int index) {
-    int neighbor_count = 1;
-    float base_d = scan->points[index].distance;
-    
-    // On ignore les points physiquement impossibles (à l'intérieur du lidar/chassis)
-    if (base_d < 60.0f) return false; 
-    
-    // On élargit la fenêtre de recherche (+2) pour tolérer 1 ou 2 points "ratés"
-    int window = (int)min_cluster_pts + 2; 
-
-    // Regarde devant
-    for (int i = 1; i <= window; i++) {
-        int idx = (index + i) % scan->index;
-        float d = scan->points[idx].distance;
-        if (d > 60.0f && fabsf(d - base_d) < cluster_tolerance) neighbor_count++;
-    }
-    // Regarde derrière
-    for (int i = 1; i <= window; i++) {
-        int idx = (index - i + scan->index) % scan->index;
-        float d = scan->points[idx].distance;
-        if (d > 60.0f && fabsf(d - base_d) < cluster_tolerance) neighbor_count++;
-    }
-    
-    return neighbor_count >= (int)min_cluster_pts;
-}
-
 void Path_Init(void) {
     current_goal.x = 0.0f;
     current_goal.y = 0.0f;
@@ -86,135 +59,19 @@ static void limit_magnitude(float* x, float* y, float max_val) {
     }
 }
 
-void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, RobotPose current_pose, float *rep_vx, float *rep_vy) {
-    *rep_vx = 0.0f;
-    *rep_vy = 0.0f;
-
-    if (scan == NULL || scan->index == 0) return;
-
-    float min_front_dist = d_max;
-    float front_angle = 0.0f;
-    float front_diff_angle = 0.0f; // NOUVEAU : Pour savoir de quel côté est l'obstacle
-    bool front_found = false;
-
-    float min_blind_dist = shield_max;
-    float blind_angle = 0.0f;
-    bool blind_found = false;
-
-    float motion_angle_deg = motion_angle_rad * (180.0f / M_PI);
-
-    // 1. RECHERCHE DES MENACES
-    for (int i = 0; i < scan->index; i++) {
-        float d = scan->points[i].distance;
-        
-        // Rayon physique du robot : on ignore ce qui est "à l'intérieur" de lui
-        if (d < 60.0f || !is_valid_obstacle(scan, i)) continue;
-
-        float angle_deg = scan->points[i].angle;
-        if (angle_deg > 180.0f) angle_deg -= 360.0f;
-        
-        float angle_rad = scan->points[i].angle * (M_PI / 180.0f);
-
-        // --- CONSCIENCE DE LA TABLE ---
-        float point_global_angle = current_pose.theta + angle_rad;
-        float pt_x = current_pose.x + d * cosf(point_global_angle);
-        float pt_y = current_pose.y + d * sinf(point_global_angle);
-
-        bool is_border = false;
-        if (pt_x < BORDER_MARGIN || pt_x > (3000.0f - BORDER_MARGIN) ||
-            pt_y < BORDER_MARGIN || pt_y > (2000.0f - BORDER_MARGIN)) {
-            is_border = true; 
-        }
-
-        // --- CALCUL DE L'ÉCART AVEC LE MOUVEMENT ---
-        float diff_angle = angle_deg - motion_angle_deg;
-        while (diff_angle > 180.0f) diff_angle -= 360.0f;
-        while (diff_angle < -180.0f) diff_angle += 360.0f;
-
-        // --- SÉPARATION DES ZONES DYNAMIQUE ---
-        // Cône de 65° pour un suivi d'obstacle stable
-        if (diff_angle > -65.0f && diff_angle < 65.0f && !is_border) {
-            if (d < min_front_dist) {
-                min_front_dist = d;
-                front_angle = angle_rad; 
-                front_diff_angle = diff_angle; // On sauvegarde l'angle relatif
-                front_found = true;
-            }
-        } else {
-            if (d < min_blind_dist) {
-                min_blind_dist = d;
-                blind_angle = angle_rad;
-                blind_found = true;
-            }
-        }
-    }
-
-    float sum_vx = 0.0f;
-    float sum_vy = 0.0f;
-
-    // 2. CALCUL DE LA FORCE AVANT (Avec Esquive Intelligente)
-    if (front_found) {
-        float penetration = (d_max - min_front_dist) / (d_max - d_min);
-        if (penetration < 0.0f) penetration = 0.0f;
-        if (penetration > 1.0f) penetration = 1.0f; // Bloqué à 100% max
-
-        float force_mag = force_max * penetration;
-
-        // --- NOUVEAU : CHOIX DU CÔTÉ D'ESQUIVE ---
-        // Si l'obstacle est à gauche de ma trajectoire (>0), je glisse à droite (-1)
-        // Si l'obstacle est à droite (<0), je glisse à gauche (+1)
-        float dodge_sign = (front_diff_angle > 0.0f) ? -1.0f : 1.0f;
-
-        float r_x = -cosf(front_angle);
-        float r_y = -sinf(front_angle);
-        
-        // Vecteur tangentiel (orienté du bon côté !)
-        float t_x = -sinf(front_angle) * dodge_sign;
-        float t_y =  cosf(front_angle) * dodge_sign;
-
-        sum_vx += force_mag * (r_x + LATERAL_GAIN * t_x);
-        sum_vy += force_mag * (r_y + LATERAL_GAIN * t_y);
-    }
-
-    // 3. CALCUL DU BOUCLIER 360°
-    if (blind_found) {
-        float penetration = (shield_max - min_blind_dist) / (shield_max - d_min);
-        if (penetration < 0.0f) penetration = 0.0f;
-        if (penetration > 1.2f) penetration = 1.2f; 
-
-        float force_mag = force_shield * penetration;
-
-        float r_x = -cosf(blind_angle);
-        float r_y = -sinf(blind_angle);
-
-        sum_vx += force_mag * r_x;
-        sum_vy += force_mag * r_y;
-    }
-
-    // FILTRE LISSAGE EXPONENTIEL (Réactif)
-    static float filtered_vx = 0.0f;
-    static float filtered_vy = 0.0f;
-    const float ALPHA = 0.6f; // Un lissage doux (0.6) pour enlever les vibrations du Lidar sans être en retard
-
-    filtered_vx = ALPHA * sum_vx + (1.0f - ALPHA) * filtered_vx;
-    filtered_vy = ALPHA * sum_vy + (1.0f - ALPHA) * filtered_vy;
-
-    *rep_vx = filtered_vx;
-    *rep_vy = filtered_vy;
-}
-
 // =========================================================
 // PARAMÈTRES DE LA NAVIGATION PAR SECTEURS
 // =========================================================
-#define NUM_SECTORS 72            // 72 secteurs = résolution de 5 degrés (très précis)
-#define SECTOR_ANGLE (360.0f / NUM_SECTORS)
-#define ROBOT_RADIUS 120.0f       // Rayon de ton robot (en mm) + une petite marge
-#define AVOID_DIST 400.0f         // À partir de combien de mm on prend en compte l'obstacle
-// #define BORDER_MARGIN 60.0f       // Marge des murs de la table
+#define VFH_SECTORS 72                 // 360° divisé par 72 = 5° par secteur
+#define VFH_ROBOT_RADIUS 75.0f         // Rayon physique de ton robot (en mm)
+#define VFH_MARGIN 35.0f               // Marge de sécurité autour du robot (en mm)
+#define VFH_MAX_OBSTACLE_DIST 350.0f   // Distance au-delà de laquelle on ignore les obstacles (mm)
+#define VFH_MIN_OBSTACLE_DIST 70.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
 
-VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan) {
+VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan, float desired_speed) {
     VelocityCommand cmd = {0.0f, 0.0f, 0.0f, false};
 
+    // 1. Calcul de la cible en global
     float dx_global = current_goal.x - current_pose.x;
     float dy_global = current_goal.y - current_pose.y;
     float distance_to_goal = sqrtf(dx_global*dx_global + dy_global*dy_global);
@@ -224,117 +81,129 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
         return cmd;
     }
 
-    // 1. Calcul de l'angle parfait vers la cible (en LOCAL par rapport au robot)
+    // 2. Passage de la cible dans le repère local du robot
     float cos_theta = cosf(current_pose.theta);
     float sin_theta = sinf(current_pose.theta);
     float dx_local =  dx_global * cos_theta + dy_global * sin_theta;
     float dy_local = -dx_global * sin_theta + dy_global * cos_theta;
 
+    // Angle de la cible dans le repère du robot
     float target_angle_rad = atan2f(dy_local, dx_local);
-    float target_angle_deg = target_angle_rad * (180.0f / M_PI);
-    if (target_angle_deg < 0.0f) target_angle_deg += 360.0f;
+    float target_angle_deg = target_angle_rad * 180.0f / M_PI;
+    while (target_angle_deg < 0.0f) target_angle_deg += 360.0f;
 
-    // 2. Construction de l'histogramme (false = Voie Libre, true = Obstacle)
-    bool blocked_sectors[NUM_SECTORS] = {false};
+    // =========================================================
+    // ETAPE A : CRÉATION DE L'HISTOGRAMME POLAIRE (VFH)
+    // =========================================================
+    bool blocked_sectors[VFH_SECTORS] = {false};
+    float safe_distance = VFH_ROBOT_RADIUS + VFH_MARGIN;
 
     if (scan != NULL && scan->index > 0) {
         for (int i = 0; i < scan->index; i++) {
             float d = scan->points[i].distance;
-            
-            // On ignore le châssis, les entretoises, et ce qui est trop loin
-            if (d < 60.0f || d > AVOID_DIST || !is_valid_obstacle(scan, i)) continue;
-
             float angle_deg = scan->points[i].angle;
-            if (angle_deg < 0.0f) angle_deg += 360.0f;
 
-            // --- CONSCIENCE DE LA TABLE ---
-            float point_global_angle = current_pose.theta + (angle_deg * (M_PI / 180.0f));
-            float pt_x = current_pose.x + d * cosf(point_global_angle);
-            float pt_y = current_pose.y + d * sinf(point_global_angle);
+            float diff_to_target = fabsf(angle_deg - target_angle_deg);
+            if (diff_to_target > 180.0f) diff_to_target = 360.0f - diff_to_target;
 
-            // On ne bloque pas les secteurs qui regardent les murs de la table !
-            if (pt_x < BORDER_MARGIN || pt_x > (3000.0f - BORDER_MARGIN) ||
-                pt_y < BORDER_MARGIN || pt_y > (2000.0f - BORDER_MARGIN)) {
-                continue; 
-            }
+            // CORRECTIF ICI : On ajoute d > VFH_MIN_OBSTACLE_DIST
+            if (d > VFH_MIN_OBSTACLE_DIST && d < VFH_MAX_OBSTACLE_DIST && diff_to_target < 100.0f) {
+                
+                while (angle_deg < 0.0f) angle_deg += 360.0f;
+                while (angle_deg >= 360.0f) angle_deg -= 360.0f;
 
-            // --- ON BLOQUE LE SECTEUR ---
-            int center_sector = (int)(angle_deg / SECTOR_ANGLE) % NUM_SECTORS;
-            blocked_sectors[center_sector] = true;
+                int center_sector = (int)(angle_deg / (360.0f / VFH_SECTORS)) % VFH_SECTORS;
 
-            // --- MAGIE GEOMÉTRIQUE : On élargit l'obstacle de la taille du robot ---
-            // Plus l'obstacle est proche, plus il bloque de secteurs autour de lui.
-            float safe_ratio = ROBOT_RADIUS / d;
-            if (safe_ratio > 1.0f) safe_ratio = 1.0f;
-            float angular_width_deg = asinf(safe_ratio) * (180.0f / M_PI);
-            
-            // Nombre de secteurs additionnels à bloquer à gauche et à droite
-            int num_extra_sectors = (int)(angular_width_deg / SECTOR_ANGLE) + 1;
-            
-            for (int s = 1; s <= num_extra_sectors; s++) {
-                int left_sec = (center_sector + s) % NUM_SECTORS;
-                int right_sec = (center_sector - s + NUM_SECTORS) % NUM_SECTORS;
-                blocked_sectors[left_sec] = true;
-                blocked_sectors[right_sec] = true;
+                // Limitation du ratio pour éviter l'effet "mur plat" de très près
+                float ratio = safe_distance / d;
+                if (ratio > 0.85f) ratio = 0.85f; 
+                float enlargement_rad = asinf(ratio); 
+
+                int sector_spread = (int)((enlargement_rad * 180.0f / M_PI) / (360.0f / VFH_SECTORS)) + 1;
+
+                for (int s = -sector_spread; s <= sector_spread; s++) {
+                    int idx = (center_sector + s) % VFH_SECTORS;
+                    if (idx < 0) idx += VFH_SECTORS; 
+                    blocked_sectors[idx] = true;
+                }
             }
         }
     }
 
-    // 3. Choix du meilleur chemin (Le secteur libre le plus proche de la cible)
-    int best_sector = -1;
-    int target_sector = (int)(target_angle_deg / SECTOR_ANGLE) % NUM_SECTORS;
+    // =========================================================
+    // ETAPE B : RECHERCHE DE LA MEILLEURE DIRECTION LIBRE
+    // =========================================================
+    static int previous_best_sector = -1; // Mémoire de l'ancienne décision
     
-    if (!blocked_sectors[target_sector]) {
-        // La voie royale est libre !
-        best_sector = target_sector; 
-    } else {
-        // La voie est bloquée, on scrute à gauche et à droite progressivement
-        for (int offset = 1; offset < NUM_SECTORS / 2; offset++) {
-            int sec_plus = (target_sector + offset) % NUM_SECTORS;
-            int sec_minus = (target_sector - offset + NUM_SECTORS) % NUM_SECTORS;
+    int target_sector = (int)(target_angle_deg / (360.0f / VFH_SECTORS)) % VFH_SECTORS;
+    int best_sector = -1;
+    float best_cost = 999999.0f;
+
+    // POIDS DE DÉCISION (Tu pourras les ajuster)
+    const float WEIGHT_TARGET = 1.0f;  // Envie d'aller vers la cible
+    const float WEIGHT_PREVIOUS = 0.0f; // Envie de garder la même direction qu'avant (Anti-oscillation)
+
+    for (int i = 0; i < VFH_SECTORS; i++) {
+        if (!blocked_sectors[i]) {
             
-            // Le premier secteur libre trouvé devient notre nouvelle trajectoire
-            if (!blocked_sectors[sec_plus]) {
-                best_sector = sec_plus;
-                break;
+            // 1. Écart avec le cap de la cible
+            int diff_target = abs(i - target_sector);
+            if (diff_target > VFH_SECTORS / 2) diff_target = VFH_SECTORS - diff_target;
+
+            // 2. Écart avec la décision précédente
+            int diff_prev = 0;
+            if (previous_best_sector != -1) {
+                diff_prev = abs(i - previous_best_sector);
+                if (diff_prev > VFH_SECTORS / 2) diff_prev = VFH_SECTORS - diff_prev;
             }
-            if (!blocked_sectors[sec_minus]) {
-                best_sector = sec_minus;
-                break;
+
+            // Calcul du coût : Plus le coût est bas, meilleure est la trajectoire
+            float cost = (diff_target * WEIGHT_TARGET) + (diff_prev * WEIGHT_PREVIOUS);
+
+            if (cost < best_cost) {
+                best_cost = cost;
+                best_sector = i;
             }
         }
     }
+    
+    // On sauvegarde la décision pour le prochain tour de boucle
+    previous_best_sector = best_sector;
 
-    // 4. Génération de la commande cinématique
+    // =========================================================
+    // ETAPE C : GÉNÉRATION DE LA COMMANDE DE VITESSE
+    // =========================================================
+    float raw_vx = 0.0f;
+    float raw_vy = 0.0f;
+
     if (best_sector != -1) {
-        float chosen_angle_deg = best_sector * SECTOR_ANGLE + (SECTOR_ANGLE / 2.0f);
-        float chosen_angle_rad = chosen_angle_deg * (M_PI / 180.0f);
+        float chosen_angle_deg = best_sector * (360.0f / VFH_SECTORS) + ((360.0f / VFH_SECTORS) / 2.0f);
+        float chosen_angle_rad = chosen_angle_deg * M_PI / 180.0f;
 
-        // Vitesse proportionnelle pour s'arrêter en douceur sur la cible
-        float current_speed_max = distance_to_goal * PF_ATTRACTIVE_GAIN;
-        if (current_speed_max > PF_MAX_SPEED) current_speed_max = PF_MAX_SPEED;
-
-        // On projette cette vitesse sur le vecteur local choisi
-        float target_vx = current_speed_max * cosf(chosen_angle_rad);
-        float target_vy = current_speed_max * sinf(chosen_angle_rad);
-
-        // Léger filtre pour éviter les à-coups si le lidar hésite entre 2 secteurs
-        static float filtered_vx = 0.0f;
-        static float filtered_vy = 0.0f;
-        float alpha = 0.6f; // 1.0 = aucune inertie, 0.1 = très mou
-
-        filtered_vx = alpha * target_vx + (1.0f - alpha) * filtered_vx;
-        filtered_vy = alpha * target_vy + (1.0f - alpha) * filtered_vy;
-
-        cmd.vx = filtered_vx;
-        cmd.vy = filtered_vy;
+        // On utilise directement TA consigne de vitesse calculée dans l'asservissement
+        raw_vx = desired_speed * cosf(chosen_angle_rad);
+        raw_vy = desired_speed * sinf(chosen_angle_rad);
     } else {
-        // Mode panique : tous les secteurs sont bloqués (le robot est encerclé)
-        cmd.vx = 0.0f;
-        cmd.vy = 0.0f;
+        // Le robot est 100% encerclé, on coupe la vitesse
+        raw_vx = 0.0f;
+        raw_vy = 0.0f;
     }
 
-    cmd.omega = 0.0f; 
+    // =========================================================
+    // ETAPE D : LISSAGE DES CONSIGNES (Filtre Passe-Bas)
+    // Empêche le robot de vibrer si la décision oscille entre 2 secteurs
+    // =========================================================
+    static float filtered_vx = 0.0f;
+    static float filtered_vy = 0.0f;
+    const float ALPHA = 0.8f; // 1.0 = pas de filtre, 0.1 = très lisse mais réagit lentement
+
+    filtered_vx = ALPHA * raw_vx + (1.0f - ALPHA) * filtered_vx;
+    filtered_vy = ALPHA * raw_vy + (1.0f - ALPHA) * filtered_vy;
+
+    cmd.vx = filtered_vx;
+    cmd.vy = filtered_vy;
+    cmd.omega = 0.0f; // Asservissement angulaire géré indépendamment
+
     return cmd;
 }
 

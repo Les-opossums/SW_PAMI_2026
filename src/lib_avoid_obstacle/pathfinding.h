@@ -71,9 +71,7 @@ void Path_SetGoal(float x, float y);
  * @param scan The latest LIDAR scan data (Robot Frame)
  * @return VelocityCommand (vx, vy, omega) in Robot Local Frame
  */
-VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan);
-
-void Path_GetRepulsionVector(const LD19DataPointHandler* scan, float motion_angle_rad, RobotPose current_pose, float *rep_vx, float *rep_vy);
+VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan, float desired_speed);
 
 void init_pathfinding_parameters(void);
 void Set_pathfinding_parameters(float goal_tolerance, float max_speed, float max_rotation, float attractive_gain,

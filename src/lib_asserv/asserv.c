@@ -186,53 +186,41 @@ void pos_asserv_step(void) {
     float y = position_robot.y;
     float t = position_robot.t;
 
-    // --- Erreurs
+    // --- Erreurs et Distances
     float rdx = x_o - x;
     float rdy = y_o - y;
     float d = sqrtf(rdx*rdx + rdy*rdy);
     float dt = principal_angle(t_o - t);
 
-    float cos_t = cosf(t);
-    float sin_t = sinf(t);
-    
-    // Angle global vers la cible
-    float angle = atan2f(rdy, rdx);
-
     // ==========================================
-    // 1. FORCE D'ATTRACTION
+    // 1. CALCUL DE LA VITESSE OPTIMALE (Rampes)
     // ==========================================
+    // C'est ici que tu gardes ton profil de vitesse parfait !
     float speed_order_d = radial_speed_calculation(d); 
-    
-    float vx_world = speed_order_d * cosf(angle);
-    float vy_world = speed_order_d * sinf(angle);
-
-    // Transformation vers repère robot (Force locale qui tire vers la cible)
-    float att_vx_local = vx_world * cos_t + vy_world * sin_t;
-    float att_vy_local = - vx_world * sin_t + vy_world * cos_t;
 
     // ==========================================
-    // 2. FORCE DE RÉPULSION (LiDAR)
+    // 2. DIRECTION ET ESQUIVE (VFH)
     // ==========================================
-    float rep_vx_local = 0.0f;
-    float rep_vy_local = 0.0f;
-    
-    // --- NOUVEAU : On calcule la direction locale désirée ---
-    // atan2f(Y local, X local) donne l'angle de notre glissade par rapport au nez du robot.
-    float motion_angle_rad = atan2f(att_vy_local, att_vx_local);
+    // On indique au pathfinding où on veut aller
+    Path_SetGoal(x_o, y_o);
+    RobotPose current_pose = {x, y, t, true};
+    VelocityCommand vfh_cmd;
 
-    RobotPose current_pose = {position_robot.x, position_robot.y, position_robot.t, true};
-
-    // On passe cet angle directionnel au Lidar pour qu'il oriente son "Cône Tactique" !
+    // Le VFH va prendre notre vitesse (speed_order_d) et la diriger
     if(avoidance_en) {
-        Path_GetRepulsionVector(LD19.currentScan, motion_angle_rad, current_pose, &rep_vx_local, &rep_vy_local);
+        // Avec évitement
+        vfh_cmd = Path_ComputeVelocity(current_pose, LD19.previousScan, speed_order_d);
     } else {
-        Path_GetRepulsionVector(NULL, motion_angle_rad, current_pose, &rep_vx_local, &rep_vy_local);
+        // Sans évitement (fonce tout droit)
+        vfh_cmd = Path_ComputeVelocity(current_pose, NULL, speed_order_d);
     }
+
     // ==========================================
-    // 3. FUSION APF
+    // 3. FUSION DES COMMANDES
     // ==========================================
-    speed_order.vx = att_vx_local + rep_vx_local;
-    speed_order.vy = att_vy_local + rep_vy_local;
+    // Le VFH nous donne directement le vx et vy dans le repère local du robot !
+    speed_order.vx = vfh_cmd.vx;
+    speed_order.vy = vfh_cmd.vy;
     speed_order.vt = angular_speed_calculation(dt);
     
     // --- Stop condition globale
@@ -242,6 +230,7 @@ void pos_asserv_step(void) {
         printf("Pos,done\n");
     }
 }
+
 
 float radial_speed_calculation(float distance) {
     return sqrtf(2.0f * DEFAULT_CONSTRAINT_A_MAX * distance * 0.95f);
