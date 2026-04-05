@@ -1,45 +1,23 @@
 #ifndef PATHFINDING_H
 #define PATHFINDING_H
 
-// --- Tuning Parameters ---
-#define PF_GOAL_TOLERANCE     50.0f   
-#define PF_MAX_SPEED          300.0f  
-#define PF_MAX_ROTATION       2.0f    
-#define PF_ATTRACTIVE_GAIN    1.5f    
-
-
 // =========================================================
-// PARAMÈTRES
+// PARAMÈTRES DE LA NAVIGATION PAR SECTEURS
 // =========================================================
-#define D_MIN           60.0f
+#define VFH_SECTORS 72                 // 360° divisé par 72 = 5° par secteur
+#define VFH_ROBOT_RADIUS 75.0f         // Rayon physique de ton robot (en mm)
+#define VFH_MARGIN 40.0f               // Marge de sécurité autour du robot (en mm)
+#define VFH_MAX_OBSTACLE_DIST 350.0f   // Distance au-delà de laquelle on ignore les obstacles (mm)
+#define VFH_MIN_OBSTACLE_DIST 80.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
+typedef struct {
+    float sectors;
+    float robot_radius;
+    float margin;
+    float max_obstacle_dist;
+    float min_obstacle_dist;
+} vhf_parameters_t;
 
-// 1. Paramètres du Cône Avant (Tactique)
-#define D_MAX           350.0f
-#define FORCE_MAX       300.0f 
-#define LATERAL_GAIN    1.5f 
-
-// 2. Paramètres du Bouclier Angles Morts (Survie)
-#define SHIELD_MAX      150.0f
-#define FORCE_SHIELD    400.0f
-
-#define MIN_CLUSTER_PTS 5
-#define CLUSTER_TOLERANCE 75.0f
-
-#define BORDER_MARGIN 50.0f
-
-extern float pf_goal_tolerance;
-extern float pf_max_speed;
-extern float pf_max_rotation;
-extern float pf_attractive_gain;
-
-extern float d_min;
-extern float d_max;
-extern float force_max;
-extern float lateral_gain;
-extern float shield_max;
-extern float force_shield;  
-
-
+extern vhf_parameters_t vfh_params;
 
 typedef struct {
     float vx;       // Linear Velocity X (mm/s) in Robot Frame
@@ -74,8 +52,7 @@ void Path_SetGoal(float x, float y);
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan, float desired_speed);
 
 void init_pathfinding_parameters(void);
-void Set_pathfinding_parameters(float goal_tolerance, float max_speed, float max_rotation, float attractive_gain,
-                                float dmin, float dmax, float fmax, float lat_gain, float shld_max, float f_shield);
+void Set_pathfinding_parameters(vhf_parameters_t new_params);
 uint8_t Set_Pathfinding_parameters_Cmd(void);
 uint8_t Get_Pathfinding_parameters_Cmd(void);
 

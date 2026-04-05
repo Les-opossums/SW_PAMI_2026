@@ -5,38 +5,18 @@
 #define M_PI 3.14159265358979323846f
 #endif
 
-float pf_goal_tolerance;
-float pf_max_speed;
-float pf_max_rotation;
-float pf_attractive_gain;
-float d_min;
-float d_max;
-float force_max;
-float lateral_gain;
-float shield_max;
-float force_shield;
-float min_cluster_pts;
-float cluster_tolerance;
+vhf_parameters_t vfh_params;
 
 
 // Internal state for the current goal
 static Point2D current_goal = {0.0f, 0.0f};
 
 void init_pathfinding_parameters(void) {
-    pf_goal_tolerance = PF_GOAL_TOLERANCE;
-    pf_max_speed = PF_MAX_SPEED;
-    pf_max_rotation = PF_MAX_ROTATION;
-    pf_attractive_gain = PF_ATTRACTIVE_GAIN;
-
-    d_min = D_MIN;
-    d_max = D_MAX;
-    force_max = FORCE_MAX;
-    lateral_gain = LATERAL_GAIN;
-    shield_max = SHIELD_MAX;
-    force_shield = FORCE_SHIELD;
-
-    min_cluster_pts = MIN_CLUSTER_PTS;
-    cluster_tolerance = CLUSTER_TOLERANCE;
+    vfh_params.sectors = VFH_SECTORS;
+    vfh_params.robot_radius = VFH_ROBOT_RADIUS;
+    vfh_params.margin = VFH_MARGIN;
+    vfh_params.max_obstacle_dist = VFH_MAX_OBSTACLE_DIST;
+    vfh_params.min_obstacle_dist = VFH_MIN_OBSTACLE_DIST;
 }
 
 void Path_Init(void) {
@@ -59,14 +39,6 @@ static void limit_magnitude(float* x, float* y, float max_val) {
     }
 }
 
-// =========================================================
-// PARAMÈTRES DE LA NAVIGATION PAR SECTEURS
-// =========================================================
-#define VFH_SECTORS 72                 // 360° divisé par 72 = 5° par secteur
-#define VFH_ROBOT_RADIUS 75.0f         // Rayon physique de ton robot (en mm)
-#define VFH_MARGIN 40.0f               // Marge de sécurité autour du robot (en mm)
-#define VFH_MAX_OBSTACLE_DIST 350.0f   // Distance au-delà de laquelle on ignore les obstacles (mm)
-#define VFH_MIN_OBSTACLE_DIST 80.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
 
 VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPointHandler* scan, float desired_speed) {
     VelocityCommand cmd = {0.0f, 0.0f, 0.0f, false};
@@ -250,19 +222,8 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
     return cmd;
 }
 
-void Set_pathfinding_parameters(float goal_tolerance, float max_speed, float max_rotation, float attractive_gain,
-                                float dmin, float dmax, float fmax, float lat_gain, float shld_max, float f_shield) {
-    pf_goal_tolerance = goal_tolerance;
-    pf_max_speed = max_speed;
-    pf_max_rotation = max_rotation;
-    pf_attractive_gain = attractive_gain;
-
-    d_min = dmin;
-    d_max = dmax;
-    force_max = fmax;
-    lateral_gain = lat_gain;
-    shield_max = shld_max;
-    force_shield = f_shield;
+void Set_pathfinding_parameters(vhf_parameters_t new_params) {
+    vfh_params = new_params;        
 }
 
 uint8_t Set_Pathfinding_parameters_Cmd(void){
@@ -274,18 +235,11 @@ uint8_t Set_Pathfinding_parameters_Cmd(void){
         return 1;
 
     switch(param) {
-        case 0: pf_goal_tolerance = valf; printf("Pathfinding Parameter 'Goal_Tolerance' set to %.2f\n", valf);break;
-        case 1: pf_max_speed = valf; printf("Pathfinding Parameter 'Max_Speed' set to %.2f\n", valf); break;
-        case 2: pf_max_rotation = valf; printf("Pathfinding Parameter 'Max_Rotation' set to %.2f\n", valf); break;
-        case 3: pf_attractive_gain = valf; printf("Pathfinding Parameter 'Attractive_Gain' set to %.2f\n", valf); break;
-        case 4: d_min = valf; printf("Pathfinding Parameter 'D_min' set to %.2f\n", valf); break;
-        case 5: d_max = valf; printf("Pathfinding Parameter 'D_max' set to %.2f\n", valf); break;
-        case 6: force_max = valf; printf("Pathfinding Parameter 'Force_Max' set to %.2f\n", valf); break;
-        case 7: lateral_gain = valf; printf("Pathfinding Parameter 'Lateral_Gain' set to %.2f\n", valf); break;
-        case 8: shield_max = valf; printf("Pathfinding Parameter 'Shield_Max' set to %.2f\n", valf); break;
-        case 9: force_shield = valf; printf("Pathfinding Parameter 'Force_Shield' set to %.2f\n", valf); break;
-        case 10: min_cluster_pts = valf; printf("Pathfinding Parameter 'Min_Cluster_Pts' set to %.2f\n", valf); break;
-        case 11: cluster_tolerance = valf; printf("Pathfinding Parameter 'Cluster_Tolerance' set to %.2f\n", valf); break;
+        case 0: vfh_params.sectors = valf; printf("Pathfinding Parameter 'Sectors' set to %.2f\n", valf); break;
+        case 1: vfh_params.robot_radius = valf; printf("Pathfinding Parameter 'Robot_Radius' set to %.2f\n", valf); break;
+        case 2: vfh_params.margin = valf; printf("Pathfinding Parameter 'Margin' set to %.2f\n", valf); break;
+        case 3: vfh_params.max_obstacle_dist = valf; printf("Pathfinding Parameter 'Max_Obstacle_Dist' set to %.2f\n", valf); break;
+        case 4: vfh_params.min_obstacle_dist = valf; printf("Pathfinding Parameter 'Min_Obstacle_Dist' set to %.2f\n", valf); break;
         default: return 2; // Paramètre inconnu
     }
     return 0;
@@ -293,15 +247,13 @@ uint8_t Set_Pathfinding_parameters_Cmd(void){
 
 uint8_t Get_Pathfinding_parameters_Cmd(void){
     // 1. Ton log console classique
-    printf("Pathfinding Parameters: Goal_Tolerance=%.2f, Max_Speed=%.2f, Max_Rotation=%.2f, Attractive_Gain=%.2f, D_min=%.2f, D_max=%.2f, Force_Max=%.2f, Lateral_Gain=%.2f, Shield_Max=%.2f, Force_Shield=%.2f, Min_Cluster_Pts=%.2f, Cluster_Tolerance=%.2f\n",
-        (double)pf_goal_tolerance, (double)pf_max_speed, (double)pf_max_rotation, (double)pf_attractive_gain,
-        (double)d_min, (double)d_max, (double)force_max, (double)lateral_gain, (double)shield_max, (double)force_shield, (double)min_cluster_pts, (double)cluster_tolerance);
+    printf("Pathfinding Parameters: Sectors=%.2f, Robot_Radius=%.2f, Margin=%.2f, Max_Obstacle_Dist=%.2f, Min_Obstacle_Dist=%.2f\n",
+        (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
 
     // 2. Formatage pour la page Web (séparé par des virgules pour un décodage facile en JS)
     char response[256];
-    snprintf(response, sizeof(response), "PF_PARAMS:%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-        (double)pf_goal_tolerance, (double)pf_max_speed, (double)pf_max_rotation, (double)pf_attractive_gain,
-        (double)d_min, (double)d_max, (double)force_max, (double)lateral_gain, (double)shield_max, (double)force_shield, (double)min_cluster_pts, (double)cluster_tolerance);
+    snprintf(response, sizeof(response), "PF_PARAMS:%.2f,%.2f,%.2f,%.2f,%.2f\n",
+        (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
 
     // 3. Envoi via lwIP (Assure-toi d'avoir accès à tcp_state global ici, ou passe-le en paramètre si besoin)
     // /!\ Le code ci-dessous est un exemple à adapter si tcp_state n'est pas global dans ton architecture.
