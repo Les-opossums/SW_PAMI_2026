@@ -118,6 +118,12 @@ void core1_entry() {
     LD19_init(&LD19);
     LD19_enableFiltering(&LD19);
     LD19_setDistanceRange(&LD19, 100, 4000); // 0.1m to 4m
+
+    // blindspots for the spacers (to ignore points around the spacers)
+    LD19_addBlindSpot(&LD19, 60.0f, 12.0f);
+    LD19_addBlindSpot(&LD19, 180.0f, 12.0f);
+    LD19_addBlindSpot(&LD19, 240.0f, 12.0f);
+
     while(1){
         LD19_readScan(&LD19, UART_ID);
     }

@@ -28,6 +28,8 @@ void LD19_init(LD19Instance *self) {
     self->minAngle = 0;       // angle min 0°
     self->maxAngle = 360;   // angle max 360°
 
+    self->numBlindSpots = 0;
+
     self->xOffset = 0;
     self->yOffset = 0;
     self->angularOffset = 0.0f;
@@ -316,4 +318,21 @@ uint8_t LD19_isChecksumFail(LD19Instance *self) {
     uint8_t isFail = (currentChecksumFailCount > previousChecksumFailCount);
     previousChecksumFailCount = currentChecksumFailCount;
     return isFail;
+}
+
+// ====================== BLIND SPOTS (ENTRETOISES) ======================
+void LD19_addBlindSpot(LD19Instance *self, float angle, float tolerance) {
+    if (self->numBlindSpots < LD19_MAX_BLIND_SPOTS) {
+        // Normalisation stricte de l'angle entre 0 et 360
+        while (angle < 0.0f) angle += 360.0f;
+        while (angle >= 360.0f) angle -= 360.0f;
+        
+        self->blindSpotAngles[self->numBlindSpots] = angle;
+        self->blindSpotTolerances[self->numBlindSpots] = tolerance;
+        self->numBlindSpots++;
+    }
+}
+
+void LD19_clearBlindSpots(LD19Instance *self) {
+    self->numBlindSpots = 0;
 }

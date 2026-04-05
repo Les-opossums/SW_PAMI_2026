@@ -12,6 +12,8 @@
 
 #define LD19_ANGLE_STEP_MAX 5
 
+#define LD19_MAX_BLIND_SPOTS 3
+
 
 #define M_PI 3.14159265358979323846
 
@@ -84,6 +86,10 @@ typedef struct {
     int16_t minAngle;
     int16_t maxAngle;
 
+    float blindSpotAngles[LD19_MAX_BLIND_SPOTS];
+    float blindSpotTolerances[LD19_MAX_BLIND_SPOTS];
+    uint8_t numBlindSpots;
+
     int16_t xOffset;
     int16_t yOffset;
     float angularOffset;
@@ -133,6 +139,8 @@ LD19DataPoint *LD19_getPoint(LD19Instance *self, uint16_t n);
 uint16_t LD19_getChecksumFailCount(LD19Instance *self);
 uint8_t LD19_isChecksumFail(LD19Instance *self);
 
+void LD19_addBlindSpot(LD19Instance *self, float angle, float tolerance);
+void LD19_clearBlindSpots(LD19Instance *self);
 
 static inline float LD19_getAngleStep(LD19Instance *self){
     float fsa = (float)self->receivedData.packet.startAngle / 100.0;
@@ -150,11 +158,29 @@ static inline uint8_t LD19_filter(LD19Instance *self, LD19DataPoint *data) {
     uint8_t distanceFilter = data->distance <= self->maxDist && data->distance >= self->minDist;
     uint8_t intensityFilter = data->intensity >= self->threshold;
     uint8_t angularFilter;
+    
     if (self->minAngle <= self->maxAngle) {
         angularFilter = data->angle <= self->maxAngle && data->angle >= self->minAngle;
     } else {
         angularFilter = data->angle <= self->maxAngle || data->angle >= self->minAngle;
     }
+
+    // --- NOUVEAU : Filtrage rapide des entretoises ---
+    for (uint8_t i = 0; i < self->numBlindSpots; i++) {
+        // Différence d'angle
+        float diff = data->angle - self->blindSpotAngles[i];
+        
+        // Valeur absolue rapide
+        if (diff < 0.0f) diff = -diff; 
+        
+        // Gestion du passage par 0/360
+        if (diff > 180.0f) diff = 360.0f - diff; 
+        
+        if (diff <= self->blindSpotTolerances[i]) {
+            return 0; // Point rejeté (Il tape dans l'entretoise)
+        }
+    }
+
     return distanceFilter && intensityFilter && angularFilter;
 }
 
