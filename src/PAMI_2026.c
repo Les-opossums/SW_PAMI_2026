@@ -145,12 +145,16 @@ int main()
     sleep_ms(2000); // wait for stdio to be ready
 
     Config_Load(); // Load configuration from Flash (ID, etc.)
-    
+
     // 2. Initialize Screen (Feature/Screen)
     gc9a01a_t tft;
     gc9a01a_init(&tft, LCD_CS_PIN, LCD_DC_PIN, LCD_RST_PIN);
     gc9a01a_begin(&tft); // Uses default SPI_DEFAULT_FREQ (40MHz)
     minion_eye_init(&tft);
+
+    startup_screen_show(&tft, ROBOT_ID, 12.5f, 0.0f, 0.0f, 0.0f, 0, 3000);
+    sleep_ms(2000); // wait for stdio to be ready
+
 
     // 3. Initialize Robot Logic (HEAD)
     int sequencer = 0;
