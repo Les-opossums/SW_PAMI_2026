@@ -250,14 +250,13 @@ uint8_t Get_Pathfinding_parameters_Cmd(void){
     printf("Pathfinding Parameters: Sectors=%.2f, Robot_Radius=%.2f, Margin=%.2f, Max_Obstacle_Dist=%.2f, Min_Obstacle_Dist=%.2f\n",
         (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
 
-    // 2. Formatage pour la page Web (séparé par des virgules pour un décodage facile en JS)
+    // 2. Formatage pour la page Web
     char response[256];
     snprintf(response, sizeof(response), "PF_PARAMS:%.2f,%.2f,%.2f,%.2f,%.2f\n",
         (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
 
-    // 3. Envoi via lwIP (Assure-toi d'avoir accès à tcp_state global ici, ou passe-le en paramètre si besoin)
-    // /!\ Le code ci-dessous est un exemple à adapter si tcp_state n'est pas global dans ton architecture.
-    extern tcp_server_t *tcp_state; // Exemple si défini en global
+    // 3. Envoi via lwIP 
+    extern tcp_server_t *tcp_state; 
     if (tcp_state && tcp_state->is_connected) {
         char ws_buf[300];
         uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 

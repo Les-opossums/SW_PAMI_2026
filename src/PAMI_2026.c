@@ -128,14 +128,13 @@ void core1_entry() {
         // 1. LECTURE LIDAR (Non-bloquant)
         LD19_readScan(&LD19, UART_ID);
 
-        // 2. ASSERVISSEMENT & MOTEURS (Exécuté à la vitesse de l'éclair)
-        // Move_Loop() et Asserv_Loop() passent ici pour être fluides à 100%
+        // 2. ASSERVISSEMENT & MOTEURS
         Move_Loop();
         if (IHM.au_state == 1) { 
             Asserv_Loop();
         }
 
-        // 3. TRAITEMENT LIDAR & FUSION (Dès qu'un tour complet est reçu)
+        // 3. TRAITEMENT LIDAR & FUSION
         if(LD19.newScan) {
             LD19.newScan = 0; 
             snapshot_pose = Fusion_GetState(); 
@@ -144,7 +143,7 @@ void core1_entry() {
             belief_for_loc.x *= 1000.0f;
             belief_for_loc.y *= 1000.0f;
 
-            // Calcul lourd de la localisation (Core 1 absorbe la charge)
+            // Calcul lourd de la localisation
             RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
             
             if (measured.valid && lidar_loc_en) {
@@ -313,7 +312,7 @@ int main()
             last_batteries_update_time = current_time;
         }
 
-        // --- GESTION ÉCRAN (Lourd en temps, mais n'impacte plus l'asservissement !) ---
+        // --- GESTION ÉCRAN ---
         if (IHM.match_started_once) {
             minion_eye_update_non_blocking();
         } 
