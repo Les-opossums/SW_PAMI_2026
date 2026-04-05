@@ -64,7 +64,7 @@ static void limit_magnitude(float* x, float* y, float max_val) {
 // =========================================================
 #define VFH_SECTORS 72                 // 360° divisé par 72 = 5° par secteur
 #define VFH_ROBOT_RADIUS 75.0f         // Rayon physique de ton robot (en mm)
-#define VFH_MARGIN 35.0f               // Marge de sécurité autour du robot (en mm)
+#define VFH_MARGIN 60.0f               // Marge de sécurité autour du robot (en mm)
 #define VFH_MAX_OBSTACLE_DIST 350.0f   // Distance au-delà de laquelle on ignore les obstacles (mm)
 #define VFH_MIN_OBSTACLE_DIST 80.0f    // Distance en dessous de laquelle on ignore les obstacles (mm)
 
@@ -102,6 +102,8 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
     // Tolérance : On ignore tous les points à +/- 12° autour de l'entretoise
     const float BLIND_SPOT_TOLERANCE = 12.0f; 
 
+    float min_front_dist = VFH_MAX_OBSTACLE_DIST; 
+
     if (scan != NULL && scan->index > 0) {
         for (int i = 0; i < scan->index; i++) {
             float d = scan->points[i].distance;
@@ -133,6 +135,10 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
             // On applique le filtre de distance globale (VFH_MIN et VFH_MAX) + Cône avant
             if (d > VFH_MIN_OBSTACLE_DIST && d < VFH_MAX_OBSTACLE_DIST && diff_to_target < 100.0f) {
                 
+                if (d < min_front_dist) {
+                    min_front_dist = d;
+                }
+
                 int center_sector = (int)(a / (360.0f / VFH_SECTORS)) % VFH_SECTORS;
 
                 // Limitation du ratio pour éviter l'effet "mur plat" de très près
@@ -201,9 +207,27 @@ VelocityCommand Path_ComputeVelocity(RobotPose current_pose, const LD19DataPoint
         float chosen_angle_deg = best_sector * (360.0f / VFH_SECTORS) + ((360.0f / VFH_SECTORS) / 2.0f);
         float chosen_angle_rad = chosen_angle_deg * M_PI / 180.0f;
 
-        // On utilise directement TA consigne de vitesse calculée dans l'asservissement
-        raw_vx = desired_speed * cosf(chosen_angle_rad);
-        raw_vy = desired_speed * sinf(chosen_angle_rad);
+        // --- NOUVEAU : Calcul du ralentissement ---
+        float speed_factor = 1.0f; // 100% de la vitesse par défaut
+        
+        if (min_front_dist < VFH_MAX_OBSTACLE_DIST) {
+            // Plus min_front_dist se rapproche de VFH_MIN_OBSTACLE_DIST, plus 'progress' tend vers 0
+            float range = VFH_MAX_OBSTACLE_DIST - VFH_MIN_OBSTACLE_DIST;
+            float progress = (min_front_dist - VFH_MIN_OBSTACLE_DIST) / range;
+            
+            // On descend doucement jusqu'à 25% de la vitesse quand on frôle l'obstacle
+            speed_factor = 0.25f + (0.75f * progress); 
+            
+            // Sécurités
+            if (speed_factor < 0.2f) speed_factor = 0.2f; // Ne jamais descendre sous 20% sinon il n'avance plus
+            if (speed_factor > 1.0f) speed_factor = 1.0f;
+        }
+
+        // On applique ce pourcentage à TA consigne de vitesse optimale
+        float final_speed = desired_speed * speed_factor;
+
+        raw_vx = final_speed * cosf(chosen_angle_rad);
+        raw_vy = final_speed * sinf(chosen_angle_rad);
     } else {
         // Le robot est 100% encerclé, on coupe la vitesse
         raw_vx = 0.0f;
