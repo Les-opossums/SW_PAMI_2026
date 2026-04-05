@@ -19,14 +19,18 @@ int lidar_loc_en = 1; // 0 = off, 1 = on (use lidar for localization correction)
 
 int freq_robot_data_update = 20; // Hz
 uint32_t last_robot_data_update_time = 0;
-
 uint32_t last_batteries_update_time = 0;
-
 uint32_t last_interaction_time = 0;
 uint32_t last_startup_draw_time = 0;
 
+// --- Variables partagées (Core 1 -> Core 0) pour la Télémétrie TCP ---
+volatile bool shared_new_tel_ready = false;
+volatile float shared_tel_x = 0.0f;
+volatile float shared_tel_y = 0.0f;
+volatile float shared_tel_theta = 0.0f;
+
 // ==========================================
-// --- Lidar TCP & Telemetry ---
+// --- Lidar TCP & Telemetry (Géré par Core 0) ---
 // ==========================================
 volatile uint8_t enable_tcp_telemetry = 1; 
 tcp_server_t *tcp_state = NULL;
@@ -83,10 +87,13 @@ float ease_out_cubic(float t) {
 }
 
 // ==========================================
-// --- Global State LIDAR (HEAD) ---
+// --- Global State LIDAR & SYSTEM (HEAD) ---
 // ==========================================
 LD19Instance LD19;
 
+// ==========================================
+// --- CORE 1 : TEMPS RÉEL (Asserv + Lidar) ---
+// ==========================================
 void core1_entry() {
     multicore_lockout_victim_init(); // Autorise pause pendant écriture Flash ID
 
@@ -100,16 +107,95 @@ void core1_entry() {
     LD19_addBlindSpot(&LD19, 180.0f, 12.0f);
     LD19_addBlindSpot(&LD19, 240.0f, 12.0f);
 
-    printf("LIDAR thread started on Core 1\n");
+    printf("LIDAR & ASSERV thread started on Core 1\n");
 
-    while(1){
+    // Variables pour le Lidar
+    static RobotPose snapshot_pose;
+    static RobotPose last_lidar_pose = {0.0f, 0.0f, 0.0f, true}; 
+
+    // Profilage CPU Core 1
+    uint32_t profilage_start_timer = time_us_32() / 1000; 
+    uint32_t loop_time_max_us = 0;
+    uint32_t loop_time_sum_us = 0;
+    uint32_t loop_count = 0;
+
+    while(1) {
+        // [PROFILAGE CORE 1] Top chrono
+        uint32_t loop_start_us = time_us_32();
+
+        // 1. LECTURE LIDAR (Non-bloquant)
         LD19_readScan(&LD19, UART_ID);
+
+        // 2. ASSERVISSEMENT & MOTEURS (Exécuté à la vitesse de l'éclair)
+        // Move_Loop() et Asserv_Loop() passent ici pour être fluides à 100%
+        Move_Loop();
+        if (IHM.au_state == 1) { 
+            Asserv_Loop();
+        }
+
+        // 3. TRAITEMENT LIDAR & FUSION (Dès qu'un tour complet est reçu)
+        if(LD19.newScan) {
+            LD19.newScan = 0; 
+            snapshot_pose = Fusion_GetState(); 
+            
+            RobotPose belief_for_loc = snapshot_pose;
+            belief_for_loc.x *= 1000.0f;
+            belief_for_loc.y *= 1000.0f;
+
+            // Calcul lourd de la localisation (Core 1 absorbe la charge)
+            RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
+            
+            if (measured.valid && lidar_loc_en) {
+                last_lidar_pose = measured;
+                measured.x /= 1000.0f;
+                measured.y /= 1000.0f;
+                
+                float err_x = measured.x - snapshot_pose.x;
+                float err_y = measured.y - snapshot_pose.y;
+                
+                float err_t = measured.theta - snapshot_pose.theta;
+                while (err_t < -M_PI) err_t += M_TWO_PI;
+                while (err_t >  M_PI) err_t -= M_TWO_PI;
+
+                RobotPose actual_now = Fusion_GetState();
+                RobotPose projected_lidar = measured;
+                projected_lidar.x = actual_now.x + err_x;
+                projected_lidar.y = actual_now.y + err_y;
+                projected_lidar.theta = actual_now.theta + err_t;
+
+                Fusion_Correct(projected_lidar);
+
+                // On passe les données au Core 0 pour l'envoi Wi-Fi
+                shared_tel_x = last_lidar_pose.x;
+                shared_tel_y = last_lidar_pose.y;
+                shared_tel_theta = last_lidar_pose.theta;
+                shared_new_tel_ready = true;
+            }
+        }
+
+        // [PROFILAGE CORE 1] Fin du chrono
+        uint32_t loop_end_us = time_us_32();
+        uint32_t current_loop_time = loop_end_us - loop_start_us;
+
+        if (current_loop_time > loop_time_max_us) loop_time_max_us = current_loop_time;
+        loop_time_sum_us += current_loop_time;
+        loop_count++;
+
+        uint32_t current_time = time_us_32() / 1000;
+        if (current_time - profilage_start_timer >= 1000) {
+            if (loop_count > 0) {
+                uint32_t loop_time_avg_us = loop_time_sum_us / loop_count;
+                printf("[CPU Core 1] Freq: %lu boucles/sec | Boucle (moy): %lu us | Boucle (max): %lu us\n", 
+                       loop_count, loop_time_avg_us, loop_time_max_us);
+            }
+            loop_time_max_us = 0; loop_time_sum_us = 0; loop_count = 0;
+            profilage_start_timer = current_time;
+        }
     }
 }
 
-
 // ==========================================
-// --- MAIN ---
+// --- MAIN (CORE 0) : IHM & GESTION RÉSEAU ---
 // ==========================================
 int main()
 {
@@ -117,17 +203,15 @@ int main()
     stdio_init_all();
     sleep_ms(2000); 
 
-    // 2. Load Config from Flash (ID, etc.)
+    // 2. Load Config from Flash
     Config_Load(); 
 
-    // 3. Initialize Hardware & Peripherals
+    // 3. Initialize Hardware & Peripherals (Asserv & Moteurs)
     init_motors();
     Init_Asserv();
-
     IHM_init();
-
     init_pathfinding_parameters();
-    Fusion_Init(0.2f, 0.2f, 1.5f); // init x y theta
+    Fusion_Init(0.2f, 0.2f, 1.5f);
 
     // 4. Initialize Screen
     gc9a01a_t tft;
@@ -135,41 +219,27 @@ int main()
     gc9a01a_begin(&tft); 
     minion_eye_init(&tft);
 
-    // --- Variables d'état GPIO ---
+    // Variables IHM
     bool last_leash_state = gpio_get(LEASH_PIN);
     bool last_au_state    = gpio_get(AU_PIN);
     bool last_team_state  = gpio_get(TEAM_PIN);
-    
-    bool team_state = last_team_state; // 0 = BLUE, 1 = YELLOW
-    bool au_state   = last_au_state;   // 0 = normal mode, 1 = AU mode
+    bool team_state = last_team_state; 
+    bool au_state   = last_au_state;   
 
     RobotPose pose_init = Fusion_GetState();
+    IHM_get_battery_voltage(); 
 
-    IHM_get_battery_voltage(); // Lecture initiale de la batterie pour affichage dès le départ
-
-     // Affiche l'écran de démarrage tant que le match n'a pas commencé
-    startup_screen_show(&tft, 
-                        current_config.pami_id, 
-                        IHM.current_vbat,
-                        pose_init.x,
-                        pose_init.y, 
-                        pose_init.theta, 
-                        team_state, 
-                        !au_state, 
-                        false,
-                        0); // Écran de démarrage initial
-
+    startup_screen_show(&tft, current_config.pami_id, IHM.current_vbat, pose_init.x, pose_init.y, pose_init.theta, team_state, !au_state, false, 0); 
     sleep_ms(1000); 
 
-    // --- Initialisation du Wi-Fi (ASYNCHRONE ET RETENTATIVES) ---
+    // --- Wi-Fi Asynchrone ---
     bool wifi_initialized = false;
     bool wifi_connected = false;
     int current_wifi_index = 0;
     bool wifi_connection_in_progress = false;
-    
-    uint32_t wifi_start_time = 0;      // Pour le timeout de 10s d'un essai
-    uint32_t last_wifi_check_time = 0; // Pour ne pas interroger la puce à chaque microseconde
-    uint32_t last_wifi_retry_time = 0; // Pour la pause de 15s avant de recommencer toute la liste
+    uint32_t wifi_start_time = 0;      
+    uint32_t last_wifi_check_time = 0; 
+    uint32_t last_wifi_retry_time = 0; 
 
     if (cyw43_arch_init() == 0) {
         wifi_initialized = true;
@@ -177,57 +247,58 @@ int main()
         printf("\nRecherche de réseaux Wi-Fi...\n");
 
         if (num_wifi_networks > 0) {
-            printf("Essai 1/%d : Tentative de connexion a '%s'...\n", num_wifi_networks, wifi_networks[0].ssid);
             cyw43_arch_wifi_connect_async(wifi_networks[0].ssid, wifi_networks[0].password, CYW43_AUTH_WPA2_AES_PSK);
             wifi_connection_in_progress = true;
             wifi_start_time = time_us_32() / 1000;
-        } else {
-            printf("Aucun réseau configuré. Mode STANDALONE (pas de retentatives).\n");
         }
     } else {
-        printf("Échec init Wi-Fi. Mode STANDALONE définitif.\n");
+        printf("Échec init Wi-Fi. Mode STANDALONE.\n");
     }
 
     led_rgb_init();
     Path_Init();
 
-    // Lancement du LIDAR
+    // DÉMARRAGE DU CORE 1 (Asserv & Lidar partent !)
     multicore_launch_core1(core1_entry);
     printf("PAMI-2026 ready.\n");
 
-    // Initialise le timer d'interaction pour afficher l'écran de config au démarrage
     last_interaction_time = time_us_32() / 1000; 
-
     int sequencer = 0;
 
+    // Profilage CPU Core 0
+    uint32_t profilage_start_timer = time_us_32() / 1000;
+    uint32_t loop_time_max_us = 0;
+    uint32_t loop_time_sum_us = 0;
+    uint32_t loop_count = 0;
+
     // ==========================================
-    // --- MAIN LOOP ---
+    // --- MAIN LOOP (CORE 0) ---
     // ==========================================
     while (true) {
-        Timer_Update();
+        uint32_t loop_start_us = time_us_32();
+
+        Timer_Update(); // Met à jour Timer_ms1 pour tout le système
         uint32_t current_time = Timer_ms1; 
 
-        // --- GESTION DES BOUTONS & INTERACTIONS ---
+        // --- GESTION IHM ---
         IHM_get_AU_state();
         IHM_get_team_state();
         IHM_get_leash_state();
-        // Si une interaction a eu lieu, on réarme le compteur de 20s
+        
         if (IHM.interaction_detected && !IHM.match_started_once) {
             last_interaction_time = current_time;
             IHM.interaction_detected = false;
         }
 
-        // Sécurité Arrêt d'Urgence
+        // Sécurité AU (Le Core 1 coupe l'asserv, mais le Core 0 fige les roues par précaution)
         if (!IHM.au_state) {
             motion_free();
             for (int i = 0; i < 3; i++) gpio_put(11, 1); 
         }
 
-        // --- GESTION DE LA BATTERIE (Toutes les 1s) ---
+        // --- GESTION BATTERIE ---
         if (current_time - last_batteries_update_time >= 1000) {
             IHM_get_battery_voltage();
-
-            // Envoi TCP
             if (tcp_state && tcp_state->is_connected && tcp_state->can_send) {
                 char bat_msg[32];
                 snprintf(bat_msg, sizeof(bat_msg), "BAT:%.2f\n", (double)IHM.current_vbat);
@@ -238,37 +309,21 @@ int main()
             last_batteries_update_time = current_time;
         }
 
-        // --- GESTION DE L'ÉCRAN ---
+        // --- GESTION ÉCRAN (Lourd en temps, mais n'impacte plus l'asservissement !) ---
         if (IHM.match_started_once) {
-            // MATCH COMMENCÉ : Toujours le minion
             minion_eye_update_non_blocking();
         } 
         else if ((current_time - last_interaction_time) <= 20000) {
-            // INTERACTION RÉCENTE (< 20s) : Écran de démarrage (mise à jour à 2Hz)
             if (current_time - last_startup_draw_time >= 500) {
                 RobotPose actual_now = Fusion_GetState();
-                // 0 en dernier argument pour ne pas bloquer la boucle
-                startup_screen_show(&tft, 
-                                    current_config.pami_id, // Affiche le véritable ID du robot
-                                    IHM.current_vbat, 
-                                    actual_now.x,
-                                    actual_now.y, 
-                                    actual_now.theta, 
-                                    IHM.team_state,
-                                    !IHM.au_state, // Affiche l'état d'urgence (rouge si AU actif)
-                                    wifi_connected, // Affiche l'état du Wi-Fi 
-                                    0); 
+                startup_screen_show(&tft, current_config.pami_id, IHM.current_vbat, actual_now.x, actual_now.y, actual_now.theta, IHM.team_state, !IHM.au_state, wifi_connected, 0); 
                 last_startup_draw_time = current_time;
             }
         } else {
-            // REPOS (> 20s) : Animation minion
             minion_eye_update_non_blocking();
         }
 
-
-        // --- LOGIQUE ROBOT (Moteurs & Sequencer) ---
-        Move_Loop();
-
+        // --- SÉQUENCEUR (Core 0) ---
         switch (sequencer) {
             case 0: {
                 int c = getchar_timeout_us(0);
@@ -277,61 +332,29 @@ int main()
                 break;
             }
             case 1: {
-                if (IHM.au_state == 1) { 
-                    Asserv_Loop();
-                }
+                // (Asserv_Loop a été déplacé sur le Core 1)
                 sequencer++;
                 break;
             }
             case 2: {
-                static RobotPose snapshot_pose;
-                static RobotPose last_lidar_pose = {0.0f, 0.0f, 0.0f, true}; 
-
-                if(LD19.newScan){
-                    LD19.newScan = 0; 
-                    snapshot_pose = Fusion_GetState(); 
-                    
-                    RobotPose belief_for_loc = snapshot_pose;
-                    belief_for_loc.x *= 1000.0f;
-                    belief_for_loc.y *= 1000.0f;
-
-                    RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
-                    
-                    if (measured.valid && lidar_loc_en){
-                        last_lidar_pose = measured;
-                        measured.x /= 1000.0f;
-                        measured.y /= 1000.0f;
-                        
-                        float err_x = measured.x - snapshot_pose.x;
-                        float err_y = measured.y - snapshot_pose.y;
-                        
-                        float err_t = measured.theta - snapshot_pose.theta;
-                        while (err_t < -M_PI) err_t += M_TWO_PI;
-                        while (err_t >  M_PI) err_t -= M_TWO_PI;
-
-                        RobotPose actual_now = Fusion_GetState();
-                        RobotPose projected_lidar = measured;
-                        projected_lidar.x = actual_now.x + err_x;
-                        projected_lidar.y = actual_now.y + err_y;
-                        projected_lidar.theta = actual_now.theta + err_t;
-
-                        Fusion_Correct(projected_lidar);
-                    }
-
+                // Télémétrie : On récupère les données calculées par le Core 1
+                if (shared_new_tel_ready) {
                     if (wifi_connected && tcp_state != NULL) {
-                        send_lidar_telemetry(tcp_state, last_lidar_pose.x, last_lidar_pose.y, last_lidar_pose.theta);
+                        send_lidar_telemetry(tcp_state, shared_tel_x, shared_tel_y, shared_tel_theta);
                     }
+                    shared_new_tel_ready = false;
                 }
                 sequencer++;
                 break;
             }
-            case 3: { // led management
+            case 3: { 
+                // Gestion Leds
                 static int current_led_state = -1; 
                 int desired_led_state = 0;
 
-                if (IHM.au_state == 0) desired_led_state = 0; // AU -> Rouge
-                else if (IHM.team_state == 0) desired_led_state = 1;  // BLUE
-                else desired_led_state = 2;                       // YELLOW
+                if (IHM.au_state == 0) desired_led_state = 0; 
+                else if (IHM.team_state == 0) desired_led_state = 1;  
+                else desired_led_state = 2;                       
 
                 if (desired_led_state != current_led_state) {
                     if (desired_led_state == 0) led_rgb_set_color(100, 0, 0);   
@@ -343,6 +366,7 @@ int main()
                 break;
             }
             case 4: {
+                // La stratégie globale / scénario de match
                 if(IHM.au_state == 1){
                     script_loop(); 
                 }
@@ -350,59 +374,39 @@ int main()
                 break;
             }
             case 5: {
+                // Gestion Wi-Fi (Core 0 gère le réseau)
                 if (wifi_initialized) {
-                    cyw43_arch_poll(); // Nécessaire pour maintenir la liaison asynchrone
+                    cyw43_arch_poll(); 
 
-                    // On évalue l'état réseau toutes les 500 ms (pour ne pas saturer)
                     if (current_time - last_wifi_check_time >= 500) {
                         last_wifi_check_time = current_time;
                         int link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
 
-                        // --- ETAT 1 : TENTATIVE DE CONNEXION EN COURS ---
                         if (wifi_connection_in_progress) {
                             if (link_status == CYW43_LINK_UP) {
-                                printf(">> Wi-Fi connecté avec succès à '%s' !\n", wifi_networks[current_wifi_index].ssid);
                                 wifi_connected = true;
                                 wifi_connection_in_progress = false;
-                                
-                                uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-                                printf(">> Adresse IP : %d.%d.%d.%d\n", 
-                                    ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
-                                
-                                // On ouvre le TCP si ce n'est pas déjà fait
-                                if (tcp_state == NULL) {
-                                    tcp_state = tcp_server_open();
-                                }
+                                if (tcp_state == NULL) tcp_state = tcp_server_open();
                             } 
                             else if (link_status < 0 || (current_time - wifi_start_time > 10000)) {
-                                printf("Échec ou timeout (10s) pour '%s'.\n", wifi_networks[current_wifi_index].ssid);
                                 current_wifi_index++;
-                                
                                 if (current_wifi_index < num_wifi_networks) {
-                                    printf("Essai %d/%d : Tentative de connexion a '%s'...\n", 
-                                           current_wifi_index + 1, num_wifi_networks, wifi_networks[current_wifi_index].ssid);
                                     cyw43_arch_wifi_connect_async(wifi_networks[current_wifi_index].ssid, wifi_networks[current_wifi_index].password, CYW43_AUTH_WPA2_AES_PSK);
                                     wifi_start_time = current_time;
                                 } else {
-                                    printf("\nAucun Wi-Fi trouvé sur cette passe. Le robot passe en veille réseau.\n");
                                     wifi_connection_in_progress = false;
-                                    last_wifi_retry_time = current_time; // Début de la période de repos
+                                    last_wifi_retry_time = current_time;
                                 }
                             }
                         } 
-                        // --- ETAT 2 : CONNECTÉ (Surveillance de coupure) ---
                         else if (wifi_connected) {
                             if (link_status != CYW43_LINK_UP) {
-                                printf("\n[ALERTE] Perte de la connexion Wi-Fi ! Passage en veille réseau.\n");
                                 wifi_connected = false;
-                                last_wifi_retry_time = current_time; // On attend avant de bourriner
+                                last_wifi_retry_time = current_time; 
                             }
                         } 
-                        // --- ETAT 3 : DÉCONNECTÉ ET EN PAUSE ---
                         else {
-                            // On retente toute la liste des Wi-Fi toutes les 15 secondes
                             if (current_time - last_wifi_retry_time > 15000 && num_wifi_networks > 0) {
-                                printf("\nNouvelle tentative de recherche de réseaux Wi-Fi...\n");
                                 current_wifi_index = 0;
                                 cyw43_arch_wifi_connect_async(wifi_networks[0].ssid, wifi_networks[0].password, CYW43_AUTH_WPA2_AES_PSK);
                                 wifi_connection_in_progress = true;
@@ -418,6 +422,24 @@ int main()
                 sequencer = 0;
                 break;
         }
+
+        // [PROFILAGE CORE 0]
+        uint32_t loop_end_us = time_us_32();
+        uint32_t current_loop_time = loop_end_us - loop_start_us;
+
+        if (current_loop_time > loop_time_max_us) loop_time_max_us = current_loop_time;
+        loop_time_sum_us += current_loop_time;
+        loop_count++;
+
+        if (current_time - profilage_start_timer >= 1000) {
+            if (loop_count > 0) {
+                uint32_t loop_time_avg_us = loop_time_sum_us / loop_count;
+                printf("[CPU Core 0] Freq: %lu boucles/sec | Boucle (moy): %lu us | Boucle (max): %lu us\n", 
+                       loop_count, loop_time_avg_us, loop_time_max_us);
+            }
+            loop_time_max_us = 0; loop_time_sum_us = 0; loop_count = 0;
+            profilage_start_timer = current_time;
+        }
     }
     return 0;
 }
@@ -425,7 +447,6 @@ int main()
 // ==========================================
 // --- Additional Functions ---
 // ==========================================
-
 uint8_t FREQ_Cmd(void) {
     uint32_t val32;
     if (Get_Param_u32(&val32)){
