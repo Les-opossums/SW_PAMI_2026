@@ -1,4 +1,4 @@
-#include "PAMI_2026.h"
+#include "../PAMI_2026.h"
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)  \

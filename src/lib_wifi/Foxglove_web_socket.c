@@ -1,4 +1,4 @@
-#include "PAMI_2026.h"
+#include "../PAMI_2026.h"
 
 void send_pose_to_foxglove(tcp_server_t *state, float x, float y, float theta) {
     if (!state || !state->client_pcb) return;

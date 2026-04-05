@@ -170,6 +170,8 @@ int main()
                         false,
                         0); // Écran de démarrage initial
 
+    sleep_ms(1000); 
+
     // --- Initialisation du Wi-Fi ---
     bool wifi_initialized = false;
     bool wifi_connected = false;
@@ -179,12 +181,23 @@ int main()
         cyw43_arch_enable_sta_mode();
         printf("\nRecherche de réseaux Wi-Fi...\n");
 
+        // Boucle sur tous les réseaux configurés dans wifi_credentials.h
         for (int i = 0; i < num_wifi_networks; i++) {
-            if ( 
-                (wifi_networks[i].ssid, wifi_networks[i].password, CYW43_AUTH_WPA2_AES_PSK, 10000) == 0) {
-                printf(">> Wi-Fi connecté à '%s' !\n", wifi_networks[i].ssid);
+            printf("Essai %d/%d : Tentative de connexion a '%s'...\n", i + 1, num_wifi_networks, wifi_networks[i].ssid);
+            
+            // On tente la connexion (retourne 0 en cas de succès)
+            if (cyw43_arch_wifi_connect_timeout_ms(wifi_networks[i].ssid, wifi_networks[i].password, CYW43_AUTH_WPA2_AES_PSK, 10000) == 0) {
+                printf(">> Wi-Fi connecté avec succès à '%s' !\n", wifi_networks[i].ssid);
                 wifi_connected = true;
-                break; 
+                
+                // Vérification de l'IP appliquée
+                uint32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
+                printf(">> Adresse IP : %d.%d.%d.%d\n", 
+                    ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+                
+                break; // Le robot est connecté, on sort de la boucle !
+            } else {
+                printf("Échec de connexion à '%s'. On passe au suivant.\n", wifi_networks[i].ssid);
             }
         }
         if (!wifi_connected) printf("\nAucun Wi-Fi trouvé. Mode STANDALONE.\n");

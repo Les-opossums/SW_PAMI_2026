@@ -1,4 +1,4 @@
-#include "PAMI_2026.h"
+#include "../PAMI_2026.h"
 
 tcp_server_t *tcp_server_init(void) {
     tcp_server_t *state = calloc(1, sizeof(tcp_server_t));

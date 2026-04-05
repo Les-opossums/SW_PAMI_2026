@@ -56,17 +56,18 @@
 #include "lib_screen/startup_screen.h"
 
 // include for web socket
-#include "tcp_server.h"
-#include "tcp_client.h"
-#include "websocket.h"
-#include "Foxglove_web_socket.h"
+#include "lib_wifi/tcp_server.h"
+#include "lib_wifi/tcp_client.h"
+#include "lib_wifi/websocket.h"
+#include "lib_wifi/Foxglove_web_socket.h"
+#include "wifi_credentials.h"
+
 #include "lwipopts.h"
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
 #include "lwip/ip4_addr.h"
 #include "lwip/netif.h"
 #include "lwip/dhcp.h"
-#include "wifi_credentials.h"
 
 #include "mbedtls/sha1.h"
 #include "mbedtls/base64.h"
