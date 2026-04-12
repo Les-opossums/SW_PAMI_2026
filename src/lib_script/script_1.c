@@ -7,7 +7,7 @@ static Position Goal_Pos;
 
 static int previous_AU_state = -1;
 
-static Position init_pos = {0.2f, 0.2f, 1.5f};
+static Position init_pos = {0.2f, 1.8f, -1.5f};
 
 void script_match_1_loop(void){
     // 1. Arrêt d'urgence ou tirette non tirée

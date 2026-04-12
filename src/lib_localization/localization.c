@@ -9,13 +9,6 @@
 #define M_TWO_PI 6.28318530717958647692f
 #endif
 
-// -- internal constants --
-#define HIST_RES 20.0f // 20 mm per bin
-#define HIST_SIZE 300 // range coverage
-#define HIST_CENTER (HIST_SIZE / 2) // center index of histogram
-#define MIN_WALL_PTS 5 // minimum number of points to consider a wall valid
-
-
 float table_size_x = TABLE_SIZE_X;
 float table_size_y = TABLE_SIZE_Y;
 
@@ -158,31 +151,37 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     // step 4: Windowed Peak Search dynamique (Prise en compte de la scène 2026)
     int search_window = 400 / HIST_RES; 
 
-    // Murs par défaut (bords extérieurs de la table)
+    // Initialisation avec les bords de table par défaut
     float expected_wall_left_x   = 0.0f;
     float expected_wall_right_x  = table_size_x; 
     float expected_wall_bottom_y = 0.0f;
     float expected_wall_top_y    = table_size_y;
 
-    // Constantes de la scène 2026
-    const float SCENE_X_MIN = 600.0f;
-    const float SCENE_X_MAX = 2400.0f;
-    const float SCENE_Y_MIN = 1550.0f;
-
-    // --- SÉLECTION DYNAMIQUE DES MURS ---
-    // Si le PAMI est dans la zone Jaune (X < 600) et qu'il est assez haut en Y pour être gêné
-    if (prev_pose->x < SCENE_X_MIN && prev_pose->y > SCENE_Y_MIN - 200.0f) {
-        expected_wall_right_x = SCENE_X_MIN; // Le mur droit visible est le flanc gauche de la scène
-    }
-    // Si le PAMI est dans la zone Bleue (X > 2400)
-    else if (prev_pose->x > SCENE_X_MAX && prev_pose->y > SCENE_Y_MIN - 200.0f) {
-        expected_wall_left_x = SCENE_X_MAX; // Le mur gauche visible est le flanc droit de la scène
-    }
-    // Si le PAMI est devant la scène (en Y) et entre ses limites X
-    else if (prev_pose->x >= SCENE_X_MIN && prev_pose->x <= SCENE_X_MAX && prev_pose->y < SCENE_Y_MIN) {
-        expected_wall_top_y = SCENE_Y_MIN; // Le mur haut visible est la face avant de la scène
-    }
-
+    #if SCENE_DETECTION_ENABLED
+        // Logique de zone pour la scène 2026
+        // On regarde où se trouve le PAMI par rapport à la scène
+        
+        // Cas 1 : PAMI est sur les côtés (Zone de départ ou approche latérale)
+        if (prev_pose->y > (SCENE_Y_MIN - SCENE_MARGIN_MM)) {
+            if (prev_pose->x < SCENE_X_MIN) {
+                // Le mur "droit" pour le robot est le flanc gauche de la scène
+                expected_wall_right_x = SCENE_X_MIN;
+            } 
+            else if (prev_pose->x > SCENE_X_MAX) {
+                // Le mur "gauche" pour le robot est le flanc droit de la scène
+                expected_wall_left_x = SCENE_X_MAX;
+            }
+        }
+        // Cas 2 : PAMI est devant la scène (Zone centrale)
+        else if (prev_pose->x > (SCENE_X_MIN + SCENE_MARGIN_MM) && 
+                prev_pose->x < (SCENE_X_MAX - SCENE_MARGIN_MM)) {
+            if (prev_pose->y < SCENE_Y_MIN) {
+                // Le mur "haut" pour le robot est la face avant de la scène
+                expected_wall_top_y = SCENE_Y_MIN;
+            }
+        }
+    #endif
+    
     // Calcul des index où l'on s'attend à trouver les pics (distance entre le mur et le robot)
     int expected_left_idx   = (int)((expected_wall_left_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
     int expected_right_idx  = (int)((expected_wall_right_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
