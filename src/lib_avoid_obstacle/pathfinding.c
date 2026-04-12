@@ -250,19 +250,34 @@ uint8_t Get_Pathfinding_parameters_Cmd(void){
     printf("Pathfinding Parameters: Sectors=%.2f, Robot_Radius=%.2f, Margin=%.2f, Max_Obstacle_Dist=%.2f, Min_Obstacle_Dist=%.2f\n",
         (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
 
-    // 2. Formatage pour la page Web
-    char response[256];
-    snprintf(response, sizeof(response), "PF_PARAMS:%.2f,%.2f,%.2f,%.2f,%.2f\n",
-        (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
-
     // 3. Envoi via lwIP 
     extern tcp_server_t *tcp_state; 
-    if (tcp_state && tcp_state->is_connected) {
-        char ws_buf[300];
-        uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 
-                                           WEBSOCKET_OPCODE_TEXT, 
-                                           response, strlen(response), 0);
-        tcp_server_send_data(tcp_state, (uint8_t*)ws_buf, pack_len);
+    
+    // Ajout de "can_send" pour garantir que le WebSocket web est 100% prêt
+    if (tcp_state && tcp_state->is_connected && tcp_state->can_send) {
+        
+        // STATIC est vital ici ! 
+        // 1. Évite de faire exploser la RAM du processeur
+        // 2. Garantit que le buffer existe toujours au moment où la puce Wi-Fi fait l'envoi physique
+        static char response[256];
+        static char ws_buf[300];
+        
+        // 2. Formatage pour la page Web
+        snprintf(response, sizeof(response), "PF_PARAMS:%.2f,%.2f,%.2f,%.2f,%.2f\n",
+            (double)vfh_params.sectors, (double)vfh_params.robot_radius, (double)vfh_params.margin, (double)vfh_params.max_obstacle_dist, (double)vfh_params.min_obstacle_dist);
+
+        // Sécurité lwIP : on vérifie que le buffer TCP interne n'est pas saturé
+        if (tcp_sndbuf(tcp_state->client_pcb) >= strlen(response) + 10) {
+            uint64_t pack_len = WS_BuildPacket(ws_buf, sizeof(ws_buf), 
+                                               WEBSOCKET_OPCODE_TEXT, 
+                                               response, strlen(response), 0);
+                                               
+            if (pack_len > 0) {
+                tcp_server_send_data(tcp_state, (uint8_t*)ws_buf, pack_len);
+            }
+        } else {
+            printf("PF_PARAMS: Erreur, buffer TCP plein !\n");
+        }
     }
     
     return 0;
