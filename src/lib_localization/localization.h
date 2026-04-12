@@ -1,21 +1,30 @@
 #ifndef LOCALIZATION_H
 #define LOCALIZATION_H
 
-// table configuration
-#define TABLE_SIZE_X 3000.0f  // in mm
-#define TABLE_SIZE_Y 2000.0f  // in mm
+// ==========================================
+// --- SÉLECTEUR DE MODE DE JEU ---
+// ==========================================
+#define HOME_TEST_MODE 1 
 
-// Si 0, le robot ignore la scène et cherche les bords extérieurs
-#define SCENE_DETECTION_ENABLED 1
+#if HOME_TEST_MODE == 1
+    // --- Configuration Petit Plateau (1/3 côté Jaune) ---
+    #define TABLE_SIZE_X 1000.0f  // La table est coupée à 1 mètre
+    #define TABLE_SIZE_Y 2000.0f  // La largeur reste la même
+    
+    // désactive la détection pour que le Lidar cherche le vrai mur de ta table à X=1000
+    #define SCENE_DETECTION_ENABLED 0 
+#else
+    // --- Configuration Officielle Coupe 2026 ---
+    #define TABLE_SIZE_X 3000.0f  
+    #define TABLE_SIZE_Y 2000.0f
+    #define SCENE_DETECTION_ENABLED 1
+#endif
 
-// Coordonnées du rectangle de la scène
+// --- Paramètres de la Scène 2026 (Fixes) ---
 #define SCENE_X_MIN 600.0f
 #define SCENE_X_MAX 2400.0f
 #define SCENE_Y_MIN 1550.0f
 #define SCENE_Y_MAX 2000.0f
-
-// Marge de sécurité pour passer en mode "détection de bord de scène"
-// Évite les sauts de localisation quand on frôle le coin de la scène
 #define SCENE_MARGIN_MM 150.0f 
 
 // --- Configuration Histogrammes ---
@@ -24,10 +33,7 @@
 #define HIST_CENTER (HIST_SIZE / 2)
 #define MIN_WALL_PTS 5
 #define SEARCH_WINDOW_MM 400.0f
-
-#define LOC_TOLERANCE_MM 1000.0f  // in mm
-
-#define LD19_MAX_PTS_SCAN 1200
+#define LOC_TOLERANCE_MM 1000.0f
 
 extern float table_size_x;
 extern float table_size_y;

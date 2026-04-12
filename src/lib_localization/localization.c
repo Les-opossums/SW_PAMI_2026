@@ -33,6 +33,7 @@ static float refine_peak(const uint16_t* hist, int peak_idx) {
     }
     return (float)peak_idx;
 }
+
 // Helpers mathématiques
 static float normalize_angle(float angle) {
     while (angle < 0.0f) angle += M_TWO_PI;
@@ -181,7 +182,7 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
             }
         }
     #endif
-    
+
     // Calcul des index où l'on s'attend à trouver les pics (distance entre le mur et le robot)
     int expected_left_idx   = (int)((expected_wall_left_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
     int expected_right_idx  = (int)((expected_wall_right_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
