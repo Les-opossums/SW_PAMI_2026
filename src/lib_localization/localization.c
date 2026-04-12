@@ -155,40 +155,65 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         if (y_idx >= 0 && y_idx < HIST_SIZE) y_hist[y_idx]++;
     }
 
-    // step 4: Windowed Peak Search (Recherche ciblée)
-    // On cherche les murs uniquement autour de là où l'odométrie pense qu'ils sont (± 40 cm)
+    // step 4: Windowed Peak Search dynamique (Prise en compte de la scène 2026)
     int search_window = 400 / HIST_RES; 
 
-    int expected_left_idx   = (int)(-prev_pose->x / HIST_RES) + HIST_CENTER;
-    int expected_right_idx  = (int)((table_size_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
-    int expected_bottom_idx = (int)(-prev_pose->y / HIST_RES) + HIST_CENTER;
-    int expected_top_idx    = (int)((table_size_y - prev_pose->y) / HIST_RES) + HIST_CENTER;
+    // Murs par défaut (bords extérieurs de la table)
+    float expected_wall_left_x   = 0.0f;
+    float expected_wall_right_x  = table_size_x; 
+    float expected_wall_bottom_y = 0.0f;
+    float expected_wall_top_y    = table_size_y;
+
+    // Constantes de la scène 2026
+    const float SCENE_X_MIN = 600.0f;
+    const float SCENE_X_MAX = 2400.0f;
+    const float SCENE_Y_MIN = 1550.0f;
+
+    // --- SÉLECTION DYNAMIQUE DES MURS ---
+    // Si le PAMI est dans la zone Jaune (X < 600) et qu'il est assez haut en Y pour être gêné
+    if (prev_pose->x < SCENE_X_MIN && prev_pose->y > SCENE_Y_MIN - 200.0f) {
+        expected_wall_right_x = SCENE_X_MIN; // Le mur droit visible est le flanc gauche de la scène
+    }
+    // Si le PAMI est dans la zone Bleue (X > 2400)
+    else if (prev_pose->x > SCENE_X_MAX && prev_pose->y > SCENE_Y_MIN - 200.0f) {
+        expected_wall_left_x = SCENE_X_MAX; // Le mur gauche visible est le flanc droit de la scène
+    }
+    // Si le PAMI est devant la scène (en Y) et entre ses limites X
+    else if (prev_pose->x >= SCENE_X_MIN && prev_pose->x <= SCENE_X_MAX && prev_pose->y < SCENE_Y_MIN) {
+        expected_wall_top_y = SCENE_Y_MIN; // Le mur haut visible est la face avant de la scène
+    }
+
+    // Calcul des index où l'on s'attend à trouver les pics (distance entre le mur et le robot)
+    int expected_left_idx   = (int)((expected_wall_left_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
+    int expected_right_idx  = (int)((expected_wall_right_x - prev_pose->x) / HIST_RES) + HIST_CENTER;
+    int expected_bottom_idx = (int)((expected_wall_bottom_y - prev_pose->y) / HIST_RES) + HIST_CENTER;
+    int expected_top_idx    = (int)((expected_wall_top_y - prev_pose->y) / HIST_RES) + HIST_CENTER;
 
     int left_idx = -1, right_idx = -1, bottom_idx = -1, top_idx = -1;
     int max_val;
 
-    // Mur Gauche (X=0)
+    // Mur Gauche
     max_val = 0;
     for (int i = expected_left_idx - search_window; i <= expected_left_idx + search_window; i++) {
         if (i >= 0 && i < HIST_SIZE && x_hist[i] > max_val && x_hist[i] >= MIN_WALL_PTS) {
             max_val = x_hist[i]; left_idx = i;
         }
     }
-    // Mur Droit (X=2000)
+    // Mur Droit
     max_val = 0;
     for (int i = expected_right_idx - search_window; i <= expected_right_idx + search_window; i++) {
         if (i >= 0 && i < HIST_SIZE && x_hist[i] > max_val && x_hist[i] >= MIN_WALL_PTS) {
             max_val = x_hist[i]; right_idx = i;
         }
     }
-    // Mur Bas (Y=0)
+    // Mur Bas
     max_val = 0;
     for (int i = expected_bottom_idx - search_window; i <= expected_bottom_idx + search_window; i++) {
         if (i >= 0 && i < HIST_SIZE && y_hist[i] > max_val && y_hist[i] >= MIN_WALL_PTS) {
             max_val = y_hist[i]; bottom_idx = i;
         }
     }
-    // Mur Haut (Y=3000)
+    // Mur Haut
     max_val = 0;
     for (int i = expected_top_idx - search_window; i <= expected_top_idx + search_window; i++) {
         if (i >= 0 && i < HIST_SIZE && y_hist[i] > max_val && y_hist[i] >= MIN_WALL_PTS) {
@@ -196,36 +221,36 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
         }
     }
 
-    // step 5: Compute robot position in global frame avec le Barycentre
+    // step 5: Compute robot position in global frame 
     float calculated_x = prev_pose->x; 
     bool x_updated = false;
     
-    // Si on voit l'un des deux murs X, on met à jour avec précision décimale
+    // Formule mathématique globale : X_Robot = X_Mur - Distance_Lidar_Projetée
     if (left_idx != -1) {
         float exact_idx = refine_peak(x_hist, left_idx);
-        calculated_x = -(exact_idx - HIST_CENTER) * HIST_RES;
+        calculated_x = expected_wall_left_x - ((exact_idx - HIST_CENTER) * HIST_RES);
         x_updated = true;
     } else if (right_idx != -1) {
         float exact_idx = refine_peak(x_hist, right_idx);
-        calculated_x = table_size_x - ((exact_idx - HIST_CENTER) * HIST_RES);
+        calculated_x = expected_wall_right_x - ((exact_idx - HIST_CENTER) * HIST_RES);
         x_updated = true;
     }
 
     float calculated_y = prev_pose->y; 
     bool y_updated = false;
     
-    // Pareil pour Y
+    // Même principe pour l'axe Y
     if (bottom_idx != -1) {
         float exact_idx = refine_peak(y_hist, bottom_idx);
-        calculated_y = -(exact_idx - HIST_CENTER) * HIST_RES;
+        calculated_y = expected_wall_bottom_y - ((exact_idx - HIST_CENTER) * HIST_RES);
         y_updated = true;
     } else if (top_idx != -1) {
         float exact_idx = refine_peak(y_hist, top_idx);
-        calculated_y = table_size_y - ((exact_idx - HIST_CENTER) * HIST_RES);
+        calculated_y = expected_wall_top_y - ((exact_idx - HIST_CENTER) * HIST_RES);
         y_updated = true;
     }
 
-    // Si on ne voit vraiment rien (gros blocage), on rejette proprement
+    // Si on ne voit vraiment rien, on rejette
     if (!x_updated && !y_updated && fabsf(angular_error) < 0.01f) {
         return result;
     }
