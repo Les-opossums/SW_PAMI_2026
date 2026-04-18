@@ -6,11 +6,20 @@ static Position Goal_Pos;
 static int previous_AU_state = -1;
 
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos = {0.3f, 1.8f, -1.5708f}; 
+static Position init_pos_blue = {2.6f, 1.8f, -1.57}; 
+static Position init_pos_yellow = {0.3f, 1.8f, -1.57};
+static Position init_pos;
 
 void script_match_1_loop(void){
     if (IHM.au_state != previous_AU_state && IHM.au_state == 0) {
         previous_AU_state = IHM.au_state;
+        if(IHM.team_state == 0) {
+            printf("PAMI: AU mode ON - Equipe BLEUE\n");
+            init_pos = init_pos_blue;
+        } else {
+            printf("PAMI: AU mode ON - Equipe JAUNE\n");
+            init_pos = init_pos_yellow;
+        }
         Fusion_Init(init_pos.x, init_pos.y, init_pos.t); 
     } else {
         previous_AU_state = IHM.au_state;
@@ -45,9 +54,15 @@ void script_match_1_loop(void){
             
         case 2:
             // Mouvement 1 : Avancer de 50cm vers l'avant
-            Goal_Pos.x = init_pos.x;        // Reste à 0.3
-            Goal_Pos.y = init_pos.y - 0.5f; // Va à 1.3
-            Goal_Pos.t = init_pos.t;        
+            if (IHM.team_state == 0) {
+                Goal_Pos.x = init_pos.x;        // Reste à 2.6
+                Goal_Pos.y = init_pos.y - 0.5f; // Va à 1.3
+                Goal_Pos.t = init_pos.t;
+            } else {
+                Goal_Pos.x = 0.3f;        // Reste à 0.3
+                Goal_Pos.y = 1.4f; // Va à 1.3
+                Goal_Pos.t = init_pos.t;
+            }        
             motion_pos(Goal_Pos);
             match_state++; 
             break;
@@ -61,10 +76,15 @@ void script_match_1_loop(void){
 
         case 4:
             // Mouvement 2 : Décalage de 40cm vers la droite
-            // Total X = 0.3 + 0.4 = 0.7m (sécurisé car bord de table à 1.0m)
-            Goal_Pos.x = init_pos.x + 0.4f; 
-            Goal_Pos.y = 1.3f; // Garde le Y précédent
-            Goal_Pos.t = 0.0f; // Tourne vers la droite
+            if (IHM.team_state == 0) {
+                Goal_Pos.x = init_pos.x;        // Reste à 2.6
+                Goal_Pos.y = init_pos.y - 0.5f; // Va à 1.3
+                Goal_Pos.t = init_pos.t;
+            } else {
+                Goal_Pos.x = 0.7f;        // Reste à 0.3
+                Goal_Pos.y = 0.1f; // Va à 1.3
+                Goal_Pos.t = init_pos.t;
+            }   
             motion_pos(Goal_Pos);
             match_state++; 
             break;

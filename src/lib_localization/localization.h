@@ -4,7 +4,7 @@
 // ==========================================
 // --- SÉLECTEUR DE MODE DE JEU ---
 // ==========================================
-#define HOME_TEST_MODE 1 
+// #define HOME_TEST_MODE 1 
 
 #if HOME_TEST_MODE == 1
     // --- Configuration Petit Plateau (1/3 côté Jaune) ---
