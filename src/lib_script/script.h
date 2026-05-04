@@ -2,7 +2,8 @@
 #define LIB_SCRIPT_H
 
 #define START_MATCH_DELAY 3000 // 10 secondes après le démarrage du robot
-#define ENDGAME_TIME 30000 // 30 secondes après le démarrage du robot
+#define ENDGAME_TIME 15000 // 30 secondes après le démarrage du robot
+#define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
 
 #define JAUNE 1
 #define BLEU 0

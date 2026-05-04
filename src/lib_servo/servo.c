@@ -4,7 +4,6 @@
 // Variables de contrôle
 ServoState current_state = SERVO_IDLE;
 uint32_t last_move_time = 0;
-bool servo_enabled = false;
 
 // Paramètres de mouvement
 uint16_t move_delay_ms = 1000; // Temps entre deux positions

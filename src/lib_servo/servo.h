@@ -13,9 +13,6 @@ typedef enum {
     SERVO_MOVING_TO_MIN
 } ServoState;
 
-extern bool servo_enabled;
-
-
 void set_servo_angle(uint pin, float angle);
 void init_pami_servo();
 void servo_process_loop(bool enable);
