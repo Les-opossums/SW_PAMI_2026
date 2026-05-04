@@ -222,6 +222,9 @@ int main()
     gc9a01a_begin(&tft); 
     minion_eye_init(&tft);
 
+    // 5. Init servo
+    init_pami_servo();
+
     // Variables IHM
     bool last_leash_state = gpio_get(LEASH_PIN);
     bool last_au_state    = gpio_get(AU_PIN);

@@ -43,6 +43,7 @@ file(GLOB SRC_PATHFINDING src/lib_avoid_obstacle/*.c)
 file(GLOB SRC_WS2812 src/lib_ws2812/*.c)
 file(GLOB SRC_WIFI src/lib_wifi/*.c)
 file(GLOB SRC_SCRIPT src/lib_script/*.c)
+file(GLOB SRC_SERVO src/lib_servo/*.c)
 
 add_executable(PAMI_2026 
                 ${SRC_FILES} 
@@ -53,7 +54,8 @@ add_executable(PAMI_2026
                 ${SRC_PATHFINDING} 
                 ${SRC_WS2812} 
                 ${SRC_WIFI}
-                ${SRC_SCRIPT})
+                ${SRC_SCRIPT}
+                ${SRC_SERVO})
 
 pico_set_program_name(PAMI_2026 "PAMI_2026")
 pico_set_program_version(PAMI_2026 "0.1")
@@ -84,7 +86,8 @@ target_link_libraries(PAMI_2026
                         hardware_sync
                         pico_multicore
                         pico_sync            
-                        hardware_spi            
+                        hardware_spi 
+                        hardware_pwm         
         )
 
 pico_add_extra_outputs(PAMI_2026)

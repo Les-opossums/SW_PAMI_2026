@@ -19,6 +19,7 @@
 #include "hardware/adc.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+#include "hardware/pwm.h"
 
 
 #include "PAMI_2026_IO.h"
@@ -44,6 +45,9 @@
 #include "lib_asserv/Lib_Asserv.h"
 #include "Asserv_Loop.h"
 #include "Cmd_For_Move.h"
+
+//include for servo
+#include "lib_servo/servo.h"
 
 // include for script match
 #include "lib_script/script.h"

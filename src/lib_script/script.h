@@ -4,6 +4,9 @@
 #define START_MATCH_DELAY 3000 // 10 secondes après le démarrage du robot
 #define ENDGAME_TIME 30000 // 30 secondes après le démarrage du robot
 
+#define JAUNE 1
+#define BLEU 0
+
 // Function declarations
 void script_loop(void);
 
