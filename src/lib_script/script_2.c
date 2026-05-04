@@ -27,6 +27,7 @@ void script_match_2_loop(void){
         }
         Fusion_Init(init_pos.x, init_pos.y, init_pos.t); //[cite: 7]
         servo_enabled = false; // Sécurité : servo off au reset
+        avoidance_en = 1; // Réactiver l'esquive après un reset
     } else {
         previous_AU_state = IHM.au_state;
     }
@@ -73,25 +74,60 @@ void script_match_2_loop(void){
             break;
             
         case 2:
-            // Mouvement 1[cite: 5]
+            // Mouvement 1 : On fonce vers la première étape
             if (IHM.team_state == JAUNE) {
-                Goal_Pos.x = 0.3f; Goal_Pos.y = 0.3f; Goal_Pos.t = init_pos.t;
+                Goal_Pos.x = 0.3f; Goal_Pos.y = 1.3f; Goal_Pos.t = init_pos.t;
             } else {
-                Goal_Pos.x = 2.6f; Goal_Pos.y = 0.3f; Goal_Pos.t = init_pos.t;
-            }        
+                Goal_Pos.x = 2.6f; Goal_Pos.y = 1.3f; Goal_Pos.t = init_pos.t;
+            }       
+            avoidance_en = 0; 
             motion_pos(Goal_Pos);
             match_state++; 
             break;
             
         case 3:
-            if (motion_done) { //[cite: 5]
-                printf("PAMI: Mouvement Y termine.\n");
-                match_state++;
+            {
+                // Calcul de la distance restante jusqu'à Goal_Pos
+                float dx = Goal_Pos.x - position_robot.x; //[cite: 6]
+                float dy = Goal_Pos.y - position_robot.y; //[cite: 6]
+                float dist = sqrtf(dx*dx + dy*dy);
+                
+                // On n'attend pas motion_done, on anticipe !
+                if (dist < WAYPOINT_TOLERANCE) { 
+                    printf("PAMI: Passage Y valide a la volee.\n");
+                    match_state++;
+                }
+            }
+            break;          
+
+        case 4:
+            // Mouvement 2 : On change de cap sans s'arrêter
+            if (IHM.team_state == JAUNE) {
+                Goal_Pos.x = 0.3f; Goal_Pos.y = 0.3f; Goal_Pos.t = init_pos.t;
+            } else {
+                Goal_Pos.x = 2.6f; Goal_Pos.y = 0.3f; Goal_Pos.t = init_pos.t;
+            }  
+            avoidance_en = 1;  
+            motion_pos(Goal_Pos);
+            match_state++; 
+            break;
+
+        case 5:
+            {
+                // Vérification du deuxième point de passage
+                float dx = Goal_Pos.x - position_robot.x; //[cite: 6]
+                float dy = Goal_Pos.y - position_robot.y; //[cite: 6]
+                float dist = sqrtf(dx*dx + dy*dy);
+                
+                if (dist < WAYPOINT_TOLERANCE) {
+                    printf("PAMI: Mouvement 2 fluide valide !\n");
+                    match_state++; 
+                }
             }
             break;
 
-        case 4:
-            // Mouvement 2
+        case 6:
+            // Mouvement 3 : C'est le point d'arrivée final
             if (IHM.team_state == JAUNE) {
                 Goal_Pos.x = 0.7f; Goal_Pos.y = 0.1f; Goal_Pos.t = init_pos.t;
             } else {
@@ -101,9 +137,11 @@ void script_match_2_loop(void){
             match_state++; 
             break;
 
-        case 5:
-            if (motion_done) {
-                printf("PAMI: Parcours de test valide !\n");
+        case 7:
+            // Pour le DERNIER point, on veut s'arrêter précisément, 
+            // donc ici il est judicieux de garder motion_done !
+            if (motion_done) { //
+                printf("PAMI: Destination finale atteinte.\n");
                 match_state = 101; 
             }
             break;
@@ -116,7 +154,5 @@ void script_match_2_loop(void){
             break;
     }
 
-    // Appel de la machine à état du servo (doit être définie ailleurs dans ton code)
-    // Elle utilise le flag servo_enabled mis à jour ci-dessus.
     servo_process_loop(servo_enabled); 
 }
