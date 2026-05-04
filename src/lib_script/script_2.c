@@ -8,14 +8,15 @@ static int previous_AU_state = -1;
 // --- AJOUT POUR LE SERVO ---
 static bool servo_enabled = false; 
 
-
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos_blue = {2.6f, 1.9f, -1.57}; 
-static Position init_pos_yellow = {0.3f, 1.9f, -1.57};
+static Position init_pos_blue = {2.6f, 1.9f, -1.57f}; 
+static Position init_pos_yellow = {0.3f, 1.9f, -1.57f};
 static Position init_pos;
 
 void script_match_2_loop(void){
-    // Gestion de l'initialisation par l'Arrêt d'Urgence (AU)
+    // ---------------------------------------------------------
+    // 1. GESTION DE L'INITIALISATION ET ARRÊT D'URGENCE (AU)
+    // ---------------------------------------------------------
     if (IHM.au_state != previous_AU_state && IHM.au_state == 0) {
         previous_AU_state = IHM.au_state;
         if(IHM.team_state == JAUNE) {
@@ -27,7 +28,7 @@ void script_match_2_loop(void){
         }
         Fusion_Init(init_pos.x, init_pos.y, init_pos.t); //[cite: 7]
         servo_enabled = false; // Sécurité : servo off au reset
-        avoidance_en = 1; // Réactiver l'esquive après un reset
+        avoidance_en = 1;      // Réactiver l'esquive après un reset
     } else {
         previous_AU_state = IHM.au_state;
     }
@@ -38,11 +39,13 @@ void script_match_2_loop(void){
         return;
     }
     
-    // --- GESTION DU TIMING SERVO ET FIN DE MATCH ---
-    if (match_state > 0 && match_state < 100) {
+    // ---------------------------------------------------------
+    // 2. GESTION DU TIMING GLOBAL DU MATCH (Indépendant des déplacements)
+    // ---------------------------------------------------------
+    if (match_state > 0) {
         uint32_t elapsed = Timer_ms1 - timer_match;
 
-        // Activation du servo 10s avant la fin
+        // Activation du servo X secondes avant la fin
         if (elapsed >= SERVO_ACTIVATION_TIME) {
             if (!servo_enabled) {
                 printf("PAMI: 10s restantes - Activation du servo !\n");
@@ -50,14 +53,23 @@ void script_match_2_loop(void){
             }
         }
 
-        // Arrêt total à la fin du temps réglementaire
+        // Arrêt total à la fin du temps réglementaire (ex: 100s)
         if (elapsed >= ENDGAME_TIME) {
-            motion_free(); //[cite: 5]
-            servo_enabled = false; // Optionnel : arrêter le servo à la fin précise
-            match_state = 100; 
+            if (match_state != 102) { 
+                motion_free(); //
+                printf("PAMI: Fin du match, coupure des moteurs !\n");
+                
+                // CRITIQUE : On ne coupe pas le servo_enabled ici !
+                // Il restera à "true" indéfiniment pour maintenir l'action finale.
+                
+                match_state = 102; // Verrouille la machine à états de déplacement
+            }
         }
     }
 
+    // ---------------------------------------------------------
+    // 3. MACHINE À ÉTATS DE DÉPLACEMENT
+    // ---------------------------------------------------------
     switch (match_state) {
         case 0:
             if (IHM.start_match) {
@@ -74,85 +86,88 @@ void script_match_2_loop(void){
             break;
             
         case 2:
-            // Mouvement 1 : On fonce vers la première étape
+            // Mouvement 1 : On vise le premier point
             if (IHM.team_state == JAUNE) {
                 Goal_Pos.x = 0.3f; Goal_Pos.y = 1.3f; Goal_Pos.t = init_pos.t;
             } else {
                 Goal_Pos.x = 2.6f; Goal_Pos.y = 1.3f; Goal_Pos.t = init_pos.t;
             }       
-            avoidance_en = 0; 
-            motion_pos(Goal_Pos);
+            avoidance_en = 0; // Désactiver l'esquive pour ce mouvement précis 
+            motion_pos(Goal_Pos); //[cite: 5]
             match_state++; 
             break;
             
         case 3:
             {
-                // Calcul de la distance restante jusqu'à Goal_Pos
+                // Calcul de la distance jusqu'à la cible
                 float dx = Goal_Pos.x - position_robot.x; //[cite: 6]
                 float dy = Goal_Pos.y - position_robot.y; //[cite: 6]
                 float dist = sqrtf(dx*dx + dy*dy);
                 
-                // On n'attend pas motion_done, on anticipe !
+                // Validation "à la volée" sans attendre motion_done
                 if (dist < WAYPOINT_TOLERANCE) { 
-                    printf("PAMI: Passage Y valide a la volee.\n");
+                    printf("PAMI: Passage 1 valide a la volee.\n");
                     match_state++;
                 }
             }
             break;          
 
         case 4:
-            // Mouvement 2 : On change de cap sans s'arrêter
+            // Mouvement 2
             if (IHM.team_state == JAUNE) {
                 Goal_Pos.x = 0.3f; Goal_Pos.y = 0.3f; Goal_Pos.t = init_pos.t;
             } else {
                 Goal_Pos.x = 2.6f; Goal_Pos.y = 0.3f; Goal_Pos.t = init_pos.t;
             }  
             avoidance_en = 1;  
-            motion_pos(Goal_Pos);
+            motion_pos(Goal_Pos); //[cite: 5]
             match_state++; 
             break;
 
         case 5:
             {
-                // Vérification du deuxième point de passage
+                // Validation "à la volée" du point 2
                 float dx = Goal_Pos.x - position_robot.x; //[cite: 6]
                 float dy = Goal_Pos.y - position_robot.y; //[cite: 6]
                 float dist = sqrtf(dx*dx + dy*dy);
                 
                 if (dist < WAYPOINT_TOLERANCE) {
-                    printf("PAMI: Mouvement 2 fluide valide !\n");
+                    printf("PAMI: Passage 2 fluide valide !\n");
                     match_state++; 
                 }
             }
             break;
 
         case 6:
-            // Mouvement 3 : C'est le point d'arrivée final
+            // Mouvement 3 : Cible finale du script
             if (IHM.team_state == JAUNE) {
                 Goal_Pos.x = 0.7f; Goal_Pos.y = 0.1f; Goal_Pos.t = init_pos.t;
             } else {
                 Goal_Pos.x = 2.3f; Goal_Pos.y = 0.1f; Goal_Pos.t = init_pos.t;
             }   
-            motion_pos(Goal_Pos);
+            motion_pos(Goal_Pos); //[cite: 5]
             match_state++; 
             break;
 
         case 7:
-            // Pour le DERNIER point, on veut s'arrêter précisément, 
-            // donc ici il est judicieux de garder motion_done !
-            if (motion_done) { //
-                printf("PAMI: Destination finale atteinte.\n");
+            // Pour le point final, on veut un arrêt complet de l'asservissement
+            if (motion_done) { //[cite: 5]
+                printf("PAMI: Destination finale atteinte. Attente fin du timer...\n");
                 match_state = 101; 
             }
             break;
 
         case 100:
-            match_state = 101;
+        case 101:
+        case 102:
+            // Fin de script : on bloque ici en attendant que le timer 
+            // de fin de match (géré plus haut) passe la condition > ENDGAME_TIME.
             break;
 
         default:
             break;
     }
 
+    // Appel continu de la machine à état du servo
     servo_process_loop(servo_enabled); 
 }

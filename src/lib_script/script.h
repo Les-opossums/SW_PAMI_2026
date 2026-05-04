@@ -5,7 +5,7 @@
 #define ENDGAME_TIME 15000 // 30 secondes après le démarrage du robot
 #define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
 
-#define WAYPOINT_TOLERANCE 0.15f // Rayon de 15 cm pour valider le passage "à la volée"
+#define WAYPOINT_TOLERANCE 0.25f // Rayon de 25 cm pour valider le passage "à la volée"
 
 #define JAUNE 1
 #define BLEU 0

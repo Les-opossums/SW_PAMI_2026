@@ -88,6 +88,39 @@ float ease_out_cubic(float t) {
     return 1.0f - powf(1.0f - t, 3.0f);
 }
 
+void test_servo_urgence(uint servo_pin) {
+    printf("--- INIT DU TEST SERVO BARE-METAL SUR PIN %d ---\n", servo_pin);
+    
+    // 1. Initialisation de la broche en mode PWM
+    gpio_set_function(servo_pin, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(servo_pin);
+
+    // 2. Configuration pour du 50Hz (Standard Servo)
+    // L'horloge par défaut du RP2040 est à 125 MHz.
+    // Diviseur à 125.0 -> 1 tick = 1 microseconde (µs).
+    pwm_set_clkdiv(slice_num, 125.0f); 
+    // Wrap à 20000 -> Période de 20000 µs = 20 ms = 50 Hz.
+    pwm_set_wrap(slice_num, 20000);    
+
+    // 3. Activation du PWM
+    pwm_set_enabled(slice_num, true);
+
+    // 4. Boucle de test infinie (bloque le reste du robot exprès)
+    while (true) {
+        printf("Servo -> Angle Min (1000 µs)\n");
+        pwm_set_gpio_level(servo_pin, 1000); 
+        sleep_ms(1500);
+
+        printf("Servo -> Centre (1500 µs)\n");
+        pwm_set_gpio_level(servo_pin, 1500);
+        sleep_ms(1500);
+
+        printf("Servo -> Angle Max (2000 µs)\n");
+        pwm_set_gpio_level(servo_pin, 2000);
+        sleep_ms(1500);
+    }
+}
+
 // ==========================================
 // --- Global State LIDAR & SYSTEM (HEAD) ---
 // ==========================================
@@ -202,6 +235,7 @@ void core1_entry() {
 // ==========================================
 int main()
 {
+    
     // 1. Initialize standard I/O & Config
     stdio_init_all();
     sleep_ms(2000); 
@@ -281,6 +315,9 @@ int main()
     // --- MAIN LOOP (CORE 0) ---
     // ==========================================
     while (true) {
+
+
+
         uint32_t loop_start_us = time_us_32();
 
         Timer_Update(); // Met à jour Timer_ms1 pour tout le système
@@ -460,3 +497,4 @@ uint8_t FREQ_Cmd(void) {
     freq_robot_data_update = (int)val32;
     return 0;
 }
+
