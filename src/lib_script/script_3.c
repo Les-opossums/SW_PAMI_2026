@@ -5,30 +5,26 @@ static uint32_t timer_match = 0;
 static Position Goal_Pos;
 static int previous_AU_state = -1;
 
-// --- AJOUT POUR LE SERVO ---
 static bool servo_enabled = false; 
 
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos_blue = {2.75f, 1.9f, -1.57f}; 
-static Position init_pos_yellow = {0.15f, 1.9f, -1.57f};
+static Position init_pos_blue = {2.65f, 1.8f, -1.57f}; 
+static Position init_pos_yellow = {0.25f, 1.8f, -1.57f};
 static Position init_pos;
 
 void script_match_3_loop(void){
-    // ---------------------------------------------------------
-    // 1. GESTION DE L'INITIALISATION ET ARRÊT D'URGENCE (AU)
-    // ---------------------------------------------------------
     if (IHM.au_state != previous_AU_state && IHM.au_state == 0) {
         previous_AU_state = IHM.au_state;
-        if(IHM.team_state == JAUNE) {
-            printf("PAMI: AU mode ON - Equipe JAUNE\n");
-            init_pos = init_pos_yellow;
-        } else {
+        if(IHM.team_state == BLEU) {
             printf("PAMI: AU mode ON - Equipe BLEUE\n");
             init_pos = init_pos_blue;
+        } else {
+            printf("PAMI: AU mode ON - Equipe JAUNE\n");
+            init_pos = init_pos_yellow;
         }
-        Fusion_Init(init_pos.x, init_pos.y, init_pos.t); //[cite: 7]
-        servo_enabled = false; // Sécurité : servo off au reset
-        avoidance_en = 1;      // Réactiver l'esquive après un reset
+        Fusion_Init(init_pos.x, init_pos.y, init_pos.t); 
+        servo_enabled = false;
+        avoidance_en = 1;
     } else {
         previous_AU_state = IHM.au_state;
     }
@@ -70,89 +66,71 @@ void script_match_3_loop(void){
     // ---------------------------------------------------------
     // 3. MACHINE À ÉTATS DE DÉPLACEMENT
     // ---------------------------------------------------------
+
     switch (match_state) {
         case 0:
             if (IHM.start_match) {
-                printf("PAMI: Go!\n");
+                printf("PAMI: Go !\n");
                 timer_match = Timer_ms1;
+                servo_enabled = false;
+                avoidance_en = 0; // On force la désactivation de l'évitement dans la zone de départ
                 match_state++;
             }
             break;
             
         case 1:
-            // ETAPE 1 : Attente des 15 premières secondes
-            if (Timer_ms1 - timer_match >= START_PLACEMENT_TIME) {
-                printf("PAMI: 15s ecoulees, repli vers la zone de depart.\n");
+            if (Timer_ms1 - timer_match >= START_MATCH_DELAY) {
                 match_state++;
             }
             break;
-
+            
         case 2:
-            // ETAPE 2 : Repli en zone de départ avec Y = 1.65
-            // On garde le X et le Theta déterminés à l'initialisation
-            Goal_Pos.x = init_pos.x; 
-            Goal_Pos.y = 1.65f; 
+            // Mouvement 1 : Avancer de 50cm vers l'avant
+            if (IHM.team_state == BLEU) {
+                Goal_Pos.x = 2.65f;        // Reste à 2.45
+            } else {
+                Goal_Pos.x = 0.25f;        // Reste à 0.55
+            }        
+            Goal_Pos.y = 1.45f;            // Va à 1.45
             Goal_Pos.t = init_pos.t;
-            avoidance_en = 0; // On sécurise le repli sans l'esquive
-            motion_pos(Goal_Pos); //[cite: 5]
-            match_state++;
+            motion_pos(Goal_Pos);
+            match_state++; 
             break;
-
+            
         case 3:
-            // Attente de la fin du mouvement de repli
-            // Validation "à la volée" sans attendre motion_done
-            float dx = Goal_Pos.x - position_robot.x; //[cite: 6]
-            float dy = Goal_Pos.y - position_robot.y; //[cite: 6]
-            float dist = sqrtf(dx*dx + dy*dy);
-            if (dist < 0.10) { //[cite: 5]
-                printf("PAMI: Repli termine. Attente de la 85e seconde...\n");
+            if (motion_done) {
+                printf("PAMI: Point 1 atteint !\n");
+                avoidance_en = 1;
                 match_state++;
             }
             break;
 
         case 4:
-            // ETAPE 3 : Attente jusqu'à la 85ème seconde du match
-            if (Timer_ms1 - timer_match >= START_MATCH_DELAY) {
-                printf("PAMI: 85s ecoulees, lancement du script offensif !\n");
-                match_state++;
-            }
-            break;
-            
-        case 5:
-            // Mouvement 1 du script nominal : On vise le premier point
-            if (IHM.team_state == JAUNE) {
-                Goal_Pos.x = 0.15f; 
-                Goal_Pos.y = 0.8f; 
-                Goal_Pos.t = init_pos.t;
+            // Mouvement 2 : Décalage de 40cm vers la droite
+            if (IHM.team_state == BLEU) {
+                Goal_Pos.x = 2.3f;        // Va à 2.2
             } else {
-                Goal_Pos.x = 2.75f; 
-                Goal_Pos.y = 0.8f; 
-                Goal_Pos.t = init_pos.t;
-            }       
-            avoidance_en = 0; // Désactiver l'esquive pour ce mouvement précis 
-            motion_pos(Goal_Pos); //[cite: 5]
+                Goal_Pos.x = 0.7f;        // Va à 0.8
+            }   
+            Goal_Pos.y = 0.1f;            // Reste à 0.8
+            Goal_Pos.t = init_pos.t;
+            motion_pos(Goal_Pos);
             match_state++; 
             break;
-            
-        case 6:
-            {
-                // Validation "à la volée" sans attendre motion_done
-                float dx = Goal_Pos.x - position_robot.x; //[cite: 6]
-                float dy = Goal_Pos.y - position_robot.y; //[cite: 6]
-                float dist = sqrtf(dx*dx + dy*dy);
-                
-                if (dist < WAYPOINT_TOLERANCE) { 
-                    printf("PAMI: Passage 1 valide a la volee.\n");
-                    match_state = 101;
-                }
+
+        case 5:
+            // Fin du parcours : ici on attend l'arrêt complet
+            if (motion_done) {
+                printf("PAMI: Parcours de test valide !\n");
+                match_state = 101; 
             }
-            break;          
+            break;
 
         case 100:
+            match_state = 101;
+            break;
+
         case 101:
-        case 102:
-            // Fin de script : on bloque ici en attendant que le timer 
-            // de fin de match (géré plus haut) passe la condition > ENDGAME_TIME.
             break;
 
         default:
