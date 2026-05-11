@@ -1,13 +1,11 @@
 #ifndef LIB_SCRIPT_H
 #define LIB_SCRIPT_H
 
-#define START_MATCH_DELAY 25000 // 10 secondes après le démarrage du robot
-#define ENDGAME_TIME 40000 // 30 secondes après le démarrage du robot
+#define START_MATCH_DELAY 85000
+#define ENDGAME_TIME 100000
 #define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
 #define START_PLACEMENT_TIME 15000 // 15 secondes pour le placement initial avant de commencer les mouvements
 #define WAYPOINT_TOLERANCE 0.25f // Rayon de 25 cm pour valider le passage "à la volée"
-
-
 
 
 #define JAUNE 1

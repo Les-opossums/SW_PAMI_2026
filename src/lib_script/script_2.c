@@ -77,14 +77,33 @@ void script_match_2_loop(void){
                 match_state++;
             }
             break;
-            
+
         case 1:
+            if (Timer_ms1 - timer_match >= START_PLACEMENT_TIME) {
+                match_state++;
+            }
+            break;
+
+        case 2:
+            // on se replace dans la zone pour préparer le départ
+            if (IHM.team_state == BLEU) {
+                Goal_Pos.x = 2.60f;        // Reste à 2.45
+            } else {
+                Goal_Pos.x = 0.40f;        // Reste à 0.55
+            }        
+            Goal_Pos.y = 1.65f;            // Va à 1.45
+            Goal_Pos.t = init_pos.t;
+            motion_pos(Goal_Pos);
+            match_state++; 
+            break;
+            
+        case 3:
             if (Timer_ms1 - timer_match >= START_MATCH_DELAY) {
                 match_state++;
             }
             break;
             
-        case 2:
+        case 4:
             // Mouvement 1 : Avancer de 50cm vers l'avant
             if (IHM.team_state == BLEU) {
                 Goal_Pos.x = 2.60f;        // Reste à 2.45
@@ -97,7 +116,7 @@ void script_match_2_loop(void){
             match_state++; 
             break;
             
-        case 3:
+        case 5:
             if (motion_done) {
                 printf("PAMI: Point 1 atteint !\n");
                 avoidance_en = 1;
@@ -105,7 +124,7 @@ void script_match_2_loop(void){
             }
             break;
 
-        case 4:
+        case 6:
             // Mouvement 2 : Décalage de 40cm vers la droite
             if (IHM.team_state == BLEU) {
                 Goal_Pos.x = 2.2f;        // Va à 2.2
@@ -118,8 +137,8 @@ void script_match_2_loop(void){
             match_state++; 
             break;
 
-        case 5:
-            // Fin du parcours : ici on attend l'arrêt complet
+        case 7:
+            // Fin du parcours : ici on wait l'arrêt complet
             if (motion_done) {
                 printf("PAMI: Parcours de test valide !\n");
                 match_state = 101; 
