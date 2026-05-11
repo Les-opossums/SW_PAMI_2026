@@ -1,21 +1,18 @@
 #include "../PAMI_2026.h"
 
-
 // Variables de contrôle
 ServoState current_state = SERVO_IDLE;
 uint32_t last_move_time = 0;
 
-// Paramètres de mouvement
-uint16_t move_delay_ms = 1000; // Temps entre deux positions
-
-/**
- * Convertit un angle (0-180) en duty cycle PWM pour le Pico
- */
+// On utilise les constantes définies dans ton PAMI_2026.h pour les pulses
+// SERVO_MIN_PULSE (souvent 500) et SERVO_MAX_PULSE (souvent 2500)
 void set_servo_angle(uint pin, float angle) {
     uint slice_num = pwm_gpio_to_slice_num(pin);
-    // Calcul du pulse en µs
+    // Protection pour rester entre 0 et 180°
+    if (angle < 0) angle = 0;
+    if (angle > 180) angle = 180;
+
     uint32_t pulse_width = SERVO_MIN_PULSE + (uint32_t)((angle / 180.0f) * (SERVO_MAX_PULSE - SERVO_MIN_PULSE));
-    // Sur un Pico à 125MHz avec un wrap à 20000 (pour 50Hz avec diviseur 125)
     pwm_set_chan_level(slice_num, pwm_gpio_to_channel(pin), pulse_width);
 }
 
@@ -24,24 +21,28 @@ void init_pami_servo() {
     uint slice_num = pwm_gpio_to_slice_num(SERVO_PIN);
     
     pwm_config config = pwm_get_default_config();
-    // Horloge à 125MHz / 125 = 1MHz (1 tic = 1µs)
+    // Diviseur à 125.0f pour avoir 1MHz (si le Pico est à 125MHz) -> 1 tick = 1µs
     pwm_config_set_clkdiv(&config, 125.0f);
-    // Wrap à 20000 tics = 20ms (50Hz)
+    // Wrap à 20000 pour avoir une période de 20ms (50Hz), standard servo
     pwm_config_set_wrap(&config, 20000);
     
     pwm_init(slice_num, &config, true);
+    
+    // Position initiale de sécurité
+    set_servo_angle(SERVO_PIN, 0);
+    current_state = SERVO_IDLE;
 }
 
-/**
- * Machine à état à appeler dans ta boucle principale
- */
 void servo_process_loop(bool enable) {
     if (!enable) {
-        current_state = SERVO_IDLE;
+        if (current_state != SERVO_IDLE) {
+            set_servo_angle(SERVO_PIN, 0);
+            current_state = SERVO_IDLE;
+        }
         return;
     }
 
-    uint32_t now = to_ms_since_boot(get_absolute_time());
+    uint32_t now = Timer_ms1; // Utilise le timer global de ton projet
 
     switch (current_state) {
         case SERVO_IDLE:
@@ -51,17 +52,17 @@ void servo_process_loop(bool enable) {
             break;
 
         case SERVO_MOVING_TO_MAX:
-            if (now - last_move_time > move_delay_ms) {
+            if (now - last_move_time >= 1000) {
                 set_servo_angle(SERVO_PIN, 180);
-                last_move_time = now;
+                last_move_time = now; // CRUCIAL : On reset le timer ici
                 current_state = SERVO_MOVING_TO_MIN;
             }
             break;
 
         case SERVO_MOVING_TO_MIN:
-            if (now - last_move_time > move_delay_ms) {
+            if (now - last_move_time >= 1000) {
                 set_servo_angle(SERVO_PIN, 0);
-                last_move_time = now;
+                last_move_time = now; // CRUCIAL : On reset le timer ici
                 current_state = SERVO_MOVING_TO_MAX;
             }
             break;

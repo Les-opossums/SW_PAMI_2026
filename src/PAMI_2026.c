@@ -258,6 +258,7 @@ int main()
 
     // 5. Init servo
     init_pami_servo();
+    // test_servo_urgence(15); // Test bloquant pour valider le contrôle du servo avant de continuer
 
     // Variables IHM
     bool last_leash_state = gpio_get(LEASH_PIN);
