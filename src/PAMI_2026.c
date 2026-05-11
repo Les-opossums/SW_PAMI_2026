@@ -195,7 +195,8 @@ void core1_entry() {
             
             // --- CONDITION STRICTE DE LOCALISATION ---
             // On corrige UNIQUEMENT SI : Le match a commencé ET que 40s se sont écoulées
-            bool allow_correction = match_in_progress && ((current_time_ms - time_at_leash_pull) >= LIDAR_ACTIVATION_DELAY);
+            // bool allow_correction = match_in_progress && ((current_time_ms - time_at_leash_pull) >= LIDAR_ACTIVATION_DELAY);
+            bool allow_correction = true; // TEMPORAIRE : On active la correction dès le début pour les tests (À REMETTRE À LA CONDITION STRICTE CI-DESSUS)
 
             if (measured.valid && lidar_loc_en && allow_correction) {
                 last_lidar_pose = measured;
