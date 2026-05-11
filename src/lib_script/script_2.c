@@ -104,27 +104,6 @@ void script_match_2_loop(void){
             break;
             
         case 4:
-            // Mouvement 1 : Avancer de 50cm vers l'avant
-            if (IHM.team_state == BLEU) {
-                Goal_Pos.x = 2.60f;        // Reste à 2.45
-            } else {
-                Goal_Pos.x = 0.40f;        // Reste à 0.55
-            }        
-            Goal_Pos.y = 1.45f;            // Va à 1.45
-            Goal_Pos.t = init_pos.t;
-            motion_pos(Goal_Pos);
-            match_state++; 
-            break;
-            
-        case 5:
-            if (motion_done) {
-                printf("PAMI: Point 1 atteint !\n");
-                avoidance_en = 1;
-                match_state++;
-            }
-            break;
-
-        case 6:
             // Mouvement 2 : Décalage de 40cm vers la droite
             if (IHM.team_state == BLEU) {
                 Goal_Pos.x = 2.2f;        // Va à 2.2
@@ -134,10 +113,11 @@ void script_match_2_loop(void){
             Goal_Pos.y = 0.8f;            // Reste à 0.8
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
+            avoidance_en = 1;
             match_state++; 
             break;
 
-        case 7:
+        case 5:
             // Fin du parcours : ici on wait l'arrêt complet
             if (motion_done) {
                 printf("PAMI: Parcours de test valide !\n");

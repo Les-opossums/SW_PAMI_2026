@@ -77,41 +77,39 @@ void script_match_4_loop(void){
                 match_state++;
             }
             break;
-            
+
         case 1:
-            if (Timer_ms1 - timer_match >= START_MATCH_DELAY) {
+            if (Timer_ms1 - timer_match >= START_PLACEMENT_TIME) {
                 match_state++;
             }
             break;
-            
+
         case 2:
-            // Mouvement 1 : Avancer de 50cm vers l'avant
+            // on se replace dans la zone pour préparer le départ
             if (IHM.team_state == BLEU) {
-                Goal_Pos.x = 2.9f;        // Reste à 2.45
+                Goal_Pos.x = 2.85f;        // Reste à 2.45
             } else {
-                Goal_Pos.x = 0.1f;        // Reste à 0.55
+                Goal_Pos.x = 0.15f;        // Reste à 0.55
             }        
-            Goal_Pos.y = 1.45f;            // Va à 1.45
+            Goal_Pos.y = 1.65f;            // Va à 1.45
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 
             break;
             
         case 3:
-            if (motion_done) {
-                printf("PAMI: Point 1 atteint !\n");
-                avoidance_en = 1;
+            if (Timer_ms1 - timer_match >= START_MATCH_DELAY) {
                 match_state++;
             }
             break;
 
         case 4:
-            // Mouvement 2 : Décalage de 40cm vers la droite
             if (IHM.team_state == BLEU) {
                 Goal_Pos.x = 2.85f;        // Va à 2.2
             } else {
                 Goal_Pos.x = 0.15f;        // Va à 0.8
             }   
+            avoidance_en = 1;
             Goal_Pos.y = 0.8f;            // Reste à 0.8
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
@@ -119,7 +117,7 @@ void script_match_4_loop(void){
             break;
 
         case 5:
-            // Fin du parcours : ici on attend l'arrêt complet
+            // Fin du parcours : ici on wait l'arrêt complet
             if (motion_done) {
                 printf("PAMI: Parcours de test valide !\n");
                 match_state = 101; 
