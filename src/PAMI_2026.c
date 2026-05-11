@@ -148,6 +148,11 @@ void core1_entry() {
     static RobotPose snapshot_pose;
     static RobotPose last_lidar_pose = {0.0f, 0.0f, 0.0f, true}; 
 
+    // --- VARIABLES POUR LE CHRONOMÈTRE STRICT (40s) ---
+    static bool match_in_progress = false;
+    static uint32_t time_at_leash_pull = 0;
+    const uint32_t LIDAR_ACTIVATION_DELAY = 40000; // 40 secondes en ms
+
     // Profilage CPU Core 1
     uint32_t profilage_start_timer = time_us_32() / 1000; 
     uint32_t loop_time_max_us = 0;
@@ -157,6 +162,15 @@ void core1_entry() {
     while(1) {
         // [PROFILAGE CORE 1] Top chrono
         uint32_t loop_start_us = time_us_32();
+        uint32_t current_time_ms = time_us_32() / 1000; // Temps actuel du système en ms
+
+        // --- DÉTECTION EXACTE DU TIRAGE DE LAISSE ---
+        // Le Core 0 passe IHM.match_started_once à true quand on tire la laisse.
+        if (IHM.match_started_once && !match_in_progress) {
+            match_in_progress = true; // On verrouille l'état "en match"
+            time_at_leash_pull = current_time_ms; // On enregistre l'heure exacte du départ
+            printf("CORE 1 : Laisse tirée ! Lidar en pause pour 40 secondes.\\n");
+        }
 
         // 1. LECTURE LIDAR (Non-bloquant)
         LD19_readScan(&LD19, UART_ID);
@@ -176,10 +190,14 @@ void core1_entry() {
             belief_for_loc.x *= 1000.0f;
             belief_for_loc.y *= 1000.0f;
 
-            // Calcul lourd de la localisation
+            // On calcule la pose via le Lidar (pour que la télémétrie soit à jour si besoin)
             RobotPose measured = Loc_ProcessScan(LD19.previousScan, &belief_for_loc);
             
-            if (measured.valid && lidar_loc_en) {
+            // --- CONDITION STRICTE DE LOCALISATION ---
+            // On corrige UNIQUEMENT SI : Le match a commencé ET que 40s se sont écoulées
+            bool allow_correction = match_in_progress && ((current_time_ms - time_at_leash_pull) >= LIDAR_ACTIVATION_DELAY);
+
+            if (measured.valid && lidar_loc_en && allow_correction) {
                 last_lidar_pose = measured;
                 measured.x /= 1000.0f;
                 measured.y /= 1000.0f;
@@ -197,9 +215,9 @@ void core1_entry() {
                 projected_lidar.y = actual_now.y + err_y;
                 projected_lidar.theta = actual_now.theta + err_t;
 
-                Fusion_Correct(projected_lidar);
+                Fusion_Correct(projected_lidar); // Recalage effectif de l'odométrie
 
-                // On passe les données au Core 0 pour l'envoi Wi-Fi
+                // On passe les données au Core 0 pour l'envoi Wi-Fi (Télémétrie)
                 shared_tel_x = last_lidar_pose.x;
                 shared_tel_y = last_lidar_pose.y;
                 shared_tel_theta = last_lidar_pose.theta;
@@ -208,7 +226,7 @@ void core1_entry() {
         }
 
         #ifdef DEBUG_TIMING_CORE1
-            // [PROFILAGE CORE 1] Fin du chrono
+            // ... (Code de profilage intact) ...
             uint32_t loop_end_us = time_us_32();
             uint32_t current_loop_time = loop_end_us - loop_start_us;
 
@@ -229,7 +247,6 @@ void core1_entry() {
         #endif
     }
 }
-
 // ==========================================
 // --- MAIN (CORE 0) : IHM & GESTION RÉSEAU ---
 // ==========================================

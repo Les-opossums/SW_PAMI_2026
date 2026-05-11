@@ -8,8 +8,8 @@ static int previous_AU_state = -1;
 static bool servo_enabled = false; 
 
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos_blue = {2.60f, 1.8f, -1.57f}; 
-static Position init_pos_yellow = {0.4f, 1.8f, -1.57f};
+static Position init_pos_blue = {2.65f, 1.9f, -1.57f}; 
+static Position init_pos_yellow = {0.35f, 1.9f, -1.57f};
 static Position init_pos;
 
 void script_match_2_loop(void){
@@ -87,11 +87,11 @@ void script_match_2_loop(void){
         case 2:
             // on se replace dans la zone pour préparer le départ
             if (IHM.team_state == BLEU) {
-                Goal_Pos.x = 2.60f;        // Reste à 2.45
+                Goal_Pos.x = 2.65f;        // Reste à 2.65
             } else {
-                Goal_Pos.x = 0.40f;        // Reste à 0.55
+                Goal_Pos.x = 0.35f;        // Reste à 0.35
             }        
-            Goal_Pos.y = 1.65f;            // Va à 1.45
+            Goal_Pos.y = 1.65f;            // Va à 1.65
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 
@@ -104,7 +104,6 @@ void script_match_2_loop(void){
             break;
             
         case 4:
-            // Mouvement 2 : Décalage de 40cm vers la droite
             if (IHM.team_state == BLEU) {
                 Goal_Pos.x = 2.2f;        // Va à 2.2
             } else {
