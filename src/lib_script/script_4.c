@@ -118,6 +118,16 @@ void script_match_4_loop(void){
             break;
 
         case 5:
+            // Calcul de la distance restante[cite: 5, 6]
+            float dx = Goal_Pos.x - position_robot.x;
+            float dy = Goal_Pos.y - position_robot.y;
+            float dist = sqrtf(dx * dx + dy * dy);
+
+            // Désactivation de l'évitement à moins de 10cm
+            if (dist <= 0.10f) {
+                avoidance_en = 0;
+            }
+
             // Fin du parcours : ici on attend l'arrêt complet
             if (motion_done) {
                 printf("PAMI: Parcours de test valide !\n");

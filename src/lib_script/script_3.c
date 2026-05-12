@@ -8,8 +8,8 @@ static int previous_AU_state = -1;
 static bool servo_enabled = false; 
 
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos_blue = {2.9f, 1.9f, -1.57f}; 
-static Position init_pos_yellow = {0.1f, 1.9f, -1.57f};
+static Position init_pos_blue = {2.85f, 1.85f, -1.57f}; 
+static Position init_pos_yellow = {0.15f, 1.85f, -1.57f};
 static Position init_pos;
 
 void script_match_3_loop(void){
@@ -83,8 +83,33 @@ void script_match_3_loop(void){
                 match_state++;
             }
             break;
-
+        
         case 2:
+            if (IHM.team_state == BLEU) {
+                    Goal_Pos.x = 2.85f;       
+                } else {
+                    Goal_Pos.x = 0.15f;        
+                }   
+                avoidance_en = 0;
+                Goal_Pos.y = 1.45f;         
+                Goal_Pos.t = init_pos.t;
+                motion_pos(Goal_Pos);
+                match_state++; 
+                break;
+        
+        case 3:
+
+            // Calcul de la distance restante
+            float dx = Goal_Pos.x - position_robot.x;
+            float dy = Goal_Pos.y - position_robot.y;
+            float dist = sqrtf(dx * dx + dy * dy);
+
+            if (dist <= 0.10f) {
+                match_state++;
+            }
+            break;
+
+        case 4:
             if (IHM.team_state == BLEU) {
                 Goal_Pos.x = 2.85f;        // Va à 2.2
             } else {
@@ -97,8 +122,18 @@ void script_match_3_loop(void){
             match_state++; 
             break;
 
-        case 3:
-            // Fin du parcours : ici on wait l'arrêt complet
+        case 5:
+            // Calcul de la distance restante[cite: 5, 6]
+            dx = Goal_Pos.x - position_robot.x;
+            dy = Goal_Pos.y - position_robot.y;
+            dist = sqrtf(dx * dx + dy * dy);
+
+            // Désactivation de l'évitement à moins de 10cm
+            if (dist <= 0.10f) {
+                avoidance_en = 0;
+            }
+
+            // Fin du parcours : ici on attend l'arrêt complet
             if (motion_done) {
                 printf("PAMI: Parcours de test valide !\n");
                 match_state = 101; 
