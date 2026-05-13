@@ -1,10 +1,10 @@
 #ifndef LIB_SCRIPT_H
 #define LIB_SCRIPT_H
 
-#define START_MATCH_DELAY 10000
-#define ENDGAME_TIME 25000
+#define START_MATCH_DELAY 85000
+#define ENDGAME_TIME 100000
 #define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
-#define START_PLACEMENT_TIME 2000 //15000 // 15 secondes pour le placement initial avant de commencer les mouvements
+#define START_PLACEMENT_TIME 50000 //15000 // 15 secondes pour le placement initial avant de commencer les mouvements
 #define WAYPOINT_TOLERANCE 0.25f // Rayon de 25 cm pour valider le passage "à la volée"
 
 #define LOCALIZATION_ACTIVATION_DELAY 50000 // 30 secondes en millisecondes
