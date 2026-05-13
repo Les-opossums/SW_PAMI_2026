@@ -3,7 +3,10 @@
 
 #define FUSION_GAIN_XY 0.15f
 #define FUSION_GAIN_THETA 0.10f
-#define MAX_FUSION_JUMP 500.0f // in mm
+// fusion.h
+#define MAX_FUSION_JUMP 100.0f // Réduit à 100mm au lieu de 500mm pour être plus strict
+#define FUSION_MAX_ERROR_THRESHOLD 150.0f // Si l'erreur > 150mm, on ignore totalement le LiDAR
+
 
 void Fusion_Init(float start_x, float start_y, float start_theta_rad);
 

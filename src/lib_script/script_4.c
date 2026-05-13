@@ -90,14 +90,19 @@ void script_match_4_loop(void){
             } else {
                 Goal_Pos.x = 0.25f;        
             }        
-            Goal_Pos.y = 1.45f;            
+            Goal_Pos.y = 1.15f;            
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 
             break;
             
         case 3:
-            if (motion_done) {
+            // Calcul de la distance restante[cite: 5, 6]
+            float dx = Goal_Pos.x - position_robot.x;
+            float dy = Goal_Pos.y - position_robot.y;
+            float dist = sqrtf(dx * dx + dy * dy);
+
+            if (dist <= 0.10f) {
                 printf("PAMI: Point 1 atteint !\n");
                 avoidance_en = 1;
                 match_state++;
@@ -119,9 +124,9 @@ void script_match_4_loop(void){
 
         case 5:
             // Calcul de la distance restante[cite: 5, 6]
-            float dx = Goal_Pos.x - position_robot.x;
-            float dy = Goal_Pos.y - position_robot.y;
-            float dist = sqrtf(dx * dx + dy * dy);
+            dx = Goal_Pos.x - position_robot.x;
+            dy = Goal_Pos.y - position_robot.y;
+            dist = sqrtf(dx * dx + dy * dy);
 
             // Désactivation de l'évitement à moins de 10cm
             if (dist <= 0.10f) {

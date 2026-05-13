@@ -256,12 +256,12 @@ RobotPose Loc_ProcessScan(const LD19DataPointHandler* scan, RobotPose* prev_pose
     }
 
     // step 6: Gating (Filtre anti-téléportation)
-    // On vérifie que la correction ne propose pas un saut aberrant (> 300 mm)
+    // On vérifie que la correction ne propose pas un saut aberrant (> 100 mm)
     float dx = calculated_x - prev_pose->x;
     float dy = calculated_y - prev_pose->y;
     float dist_jump = sqrtf(dx*dx + dy*dy);
     
-    if (dist_jump <= 300.0f) {
+    if (dist_jump <= 100.0f) {
         result.x = calculated_x;
         result.y = calculated_y;
         

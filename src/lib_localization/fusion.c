@@ -44,24 +44,28 @@ void Fusion_Predict(float vx_local, float vy_local, float v_angular_rad, float d
     state.y += (vx_local * sin_t + vy_local * cos_t) * dt;
 }
 
+// fusion.c
 void Fusion_Correct(RobotPose lidar_meas) {
-    if (!lidar_meas.valid) return;
+    if (!lidar_meas.valid || !state.valid) return;
 
+    // Calcul de la distance entre la position actuelle (odo) et la mesure LiDAR
     float dx = lidar_meas.x - state.x;
     float dy = lidar_meas.y - state.y;
-    float dist_sq = dx * dx + dy * dy;
+    float dist_error = sqrtf(dx*dx + dy*dy);
 
-    if (dist_sq > MAX_FUSION_JUMP * MAX_FUSION_JUMP) {
-        return;
+    // Si la mesure est trop loin (> 150mm), on considère que c'est une erreur de lecture
+    // Le PAMI continuera alors en "full odométrie"
+    if (dist_error > FUSION_MAX_ERROR_THRESHOLD) {
+        printf("Fusion_Correct: Ignoring LiDAR correction due to large error (%.1f mm)\n", dist_error);
+        return; 
     }
 
+    // On applique les gains de fusion seulement si l'erreur est raisonnable
     state.x += dx * FUSION_GAIN_XY;
     state.y += dy * FUSION_GAIN_XY;
 
-    float d_theta = angle_diff_rad(lidar_meas.theta, state.theta);
-    state.theta += d_theta * FUSION_GAIN_THETA;
-
-    state.theta = normalize_angle(state.theta);
+    float dtheta = angle_diff_rad(lidar_meas.theta, state.theta);
+    state.theta = normalize_angle(state.theta + dtheta * FUSION_GAIN_THETA);
 }
 
 RobotPose Fusion_GetState(void) {
