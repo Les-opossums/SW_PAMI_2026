@@ -8,7 +8,7 @@ static int previous_AU_state = -1;
 static bool servo_enabled = false; 
 
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos_blue = {0.0f, 0.0f, 0.0f}; 
+static Position init_pos_blue = {2.275f, 1.9f, 0.0f}; 
 static Position init_pos_yellow = {0.725f, 1.9f, -1.57f};
 static Position init_pos;
 
@@ -85,7 +85,7 @@ void script_match_5_loop(void){
 
         case 2: // Go  behind stack 1
             if(IHM.team_state == BLEU) {
-                Goal_Pos.x = init_pos.x;
+                Goal_Pos.x = 1.9f;
                 Goal_Pos.y = init_pos.y;
                 Goal_Pos.t = init_pos.t;
             } else {
@@ -112,12 +112,12 @@ void script_match_5_loop(void){
         case 4: // Push stack 1
             if (Timer_ms1 - timer_match >= 0) {
                 if(IHM.team_state == BLEU) {
-                    Goal_Pos.x = init_pos.x;
-                    Goal_Pos.y = init_pos.y;
+                    Goal_Pos.x = 1.9f;
+                    Goal_Pos.y = 1.6f;
                     Goal_Pos.t = init_pos.t;
                 } else {
                     Goal_Pos.x = 1.1f;
-                    Goal_Pos.y = init_pos.y - 0.3f;
+                    Goal_Pos.y = 1.6f;
                     Goal_Pos.t = init_pos.t;
                 }
                 set_Constraint_vitesse_xy_max(0.1f);
@@ -137,6 +137,93 @@ void script_match_5_loop(void){
                 match_state++;
             }
             break;
+
+        
+        case 6: // Go back
+            if(IHM.team_state == BLEU) {
+                Goal_Pos.x = 1.9f;
+                Goal_Pos.y = init_pos.y;
+                Goal_Pos.t = init_pos.t;
+            } else {
+                Goal_Pos.x = 1.1f;
+                Goal_Pos.y = init_pos.y;
+                Goal_Pos.t = init_pos.t;
+            }
+            set_Constraint_vitesse_xy_max(0.3f);
+            motion_pos(Goal_Pos);
+            match_state++;
+            break;
+            
+        case 7:
+            // Calcul de la distance restante[cite: 5, 6]
+            dx = Goal_Pos.x - position_robot.x;
+            dy = Goal_Pos.y - position_robot.y;
+            dist = sqrtf(dx * dx + dy * dy);
+
+            if (dist <= 0.05f) {
+                printf("PAMI: Point 1 atteint !\n");
+                match_state++;
+            }
+            break;
+
+        
+        case 8: // Go behind stack 2
+            if (Timer_ms1 - timer_match >= 0) {
+                if(IHM.team_state == BLEU) {
+                    Goal_Pos.x = 1.65f;
+                    Goal_Pos.y = init_pos.y;
+                    Goal_Pos.t = init_pos.t;
+                } else {
+                    Goal_Pos.x = 1.35f;
+                    Goal_Pos.y = init_pos.y;
+                    Goal_Pos.t = init_pos.t;
+                }
+                motion_pos(Goal_Pos);
+                match_state++;
+            }
+            break;
+            
+        case 9:
+            // Calcul de la distance restante[cite: 5, 6]
+            dx = Goal_Pos.x - position_robot.x;
+            dy = Goal_Pos.y - position_robot.y;
+            dist = sqrtf(dx * dx + dy * dy);
+
+            if (dist <= 0.05f) {
+                printf("PAMI: Point 1 atteint !\n");
+                match_state++;
+            }
+            break;
+
+        case 10: // Push stack 2
+            if (Timer_ms1 - timer_match >= 0) {
+                if(IHM.team_state == BLEU) {
+                    Goal_Pos.x = 1.65f;
+                    Goal_Pos.y = 1.6f;
+                    Goal_Pos.t = init_pos.t;
+                } else {
+                    Goal_Pos.x = 1.35f;
+                    Goal_Pos.y = 1.6f;
+                    Goal_Pos.t = init_pos.t;
+                }
+                set_Constraint_vitesse_xy_max(0.1f);
+                motion_pos(Goal_Pos);
+                match_state++;
+            }
+            break;
+            
+        case 11:
+            // Calcul de la distance restante[cite: 5, 6]
+            dx = Goal_Pos.x - position_robot.x;
+            dy = Goal_Pos.y - position_robot.y;
+            dist = sqrtf(dx * dx + dy * dy);
+
+            if (dist <= 0.05f) {
+                printf("PAMI: Point 1 atteint !\n");
+                match_state++;
+            }
+            break;
+
 
         case 100:
             match_state = 101;
