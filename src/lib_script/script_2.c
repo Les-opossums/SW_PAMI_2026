@@ -91,7 +91,7 @@ void script_match_2_loop(void){
             } else {
                 Goal_Pos.x = 0.35f;        // Reste à 0.35
             }        
-            Goal_Pos.y = 1.65f;            // Va à 1.65
+            Goal_Pos.y = 1.7f;            // Va à 1.7
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 
