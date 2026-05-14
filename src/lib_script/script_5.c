@@ -73,7 +73,8 @@ void script_match_5_loop(void){
                 printf("PAMI: Go !\n");
                 timer_match = Timer_ms1;
                 servo_enabled = false;
-                avoidance_en = 1; // On force la désactivation de l'évitement dans la zone de départ
+                avoidance_en = 0; // On force la désactivation de l'évitement dans la zone de départ
+                lidar_loc_en = 0; // On désactive la localisation Lidar dès le départ
                 match_state++;
             }
             break;
@@ -88,8 +89,8 @@ void script_match_5_loop(void){
                 Goal_Pos.y = init_pos.y;
                 Goal_Pos.t = init_pos.t;
             } else {
-                Goal_Pos.x = init_pos.x;
-                Goal_Pos.y = 1.1f;
+                Goal_Pos.x = 1.1f;
+                Goal_Pos.y = init_pos.y;
                 Goal_Pos.t = init_pos.t;
             }
             motion_pos(Goal_Pos);
@@ -115,8 +116,8 @@ void script_match_5_loop(void){
                     Goal_Pos.y = init_pos.y;
                     Goal_Pos.t = init_pos.t;
                 } else {
-                    Goal_Pos.x = init_pos.x + 0.2f;
-                    Goal_Pos.y = 1.1f;
+                    Goal_Pos.x = 1.1f;
+                    Goal_Pos.y = init_pos.y - 0.3f;
                     Goal_Pos.t = init_pos.t;
                 }
                 set_Constraint_vitesse_xy_max(0.1f);
@@ -127,9 +128,9 @@ void script_match_5_loop(void){
             
         case 5:
             // Calcul de la distance restante[cite: 5, 6]
-            float dx = Goal_Pos.x - position_robot.x;
-            float dy = Goal_Pos.y - position_robot.y;
-            float dist = sqrtf(dx * dx + dy * dy);
+            dx = Goal_Pos.x - position_robot.x;
+            dy = Goal_Pos.y - position_robot.y;
+            dist = sqrtf(dx * dx + dy * dy);
 
             if (dist <= 0.05f) {
                 printf("PAMI: Point 1 atteint !\n");
