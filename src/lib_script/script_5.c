@@ -8,8 +8,8 @@ static int previous_AU_state = -1;
 static bool servo_enabled = false; 
 
 // Départ zone Jaune (regard vers l'avant de la table, Y=0)
-static Position init_pos_blue = {2.275f, 1.9f, 0.0f}; 
-static Position init_pos_yellow = {0.725f, 1.9f, -1.57f};
+static Position init_pos_blue = {2.35f, 1.95f, -1.57f}; 
+static Position init_pos_yellow = {0.65f, 1.95f, -1.57f};
 static Position init_pos;
 
 void script_match_5_loop(void){
@@ -75,6 +75,7 @@ void script_match_5_loop(void){
                 servo_enabled = false;
                 avoidance_en = 0; // On force la désactivation de l'évitement dans la zone de départ
                 lidar_loc_en = 0; // On désactive la localisation Lidar dès le départ
+                set_Constraint_vitesse_xy_max(0.3f);
                 match_state++;
             }
             break;
@@ -206,7 +207,7 @@ void script_match_5_loop(void){
                     Goal_Pos.y = 1.6f;
                     Goal_Pos.t = init_pos.t;
                 }
-                set_Constraint_vitesse_xy_max(0.1f);
+                set_Constraint_vitesse_xy_max(0.3f);
                 motion_pos(Goal_Pos);
                 match_state++;
             }
@@ -238,4 +239,4 @@ void script_match_5_loop(void){
 
     // Appel continu de la machine à état du servo
     servo_process_loop(servo_enabled); 
-}
+} 

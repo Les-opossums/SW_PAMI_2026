@@ -14,13 +14,27 @@
 /*############################################################################*/
 /*                                  Motion                                    */
 /*############################################################################*/
-#define DEFAULT_CONSTRAINT_V_MAX 0.3
-#define DEFAULT_CONSTRAINT_VT_MAX 1.5
+#ifndef PAMI_DUAL_WHEEL
+#define PAMI_DUAL_WHEEL 0
+#endif
 
-#define DEFAULT_CONSTRAINT_A_MAX 0.3
-#define DEFAULT_CONSTRAINT_AT_MAX 1
+#if PAMI_DUAL_WHEEL
+    #define DEFAULT_CONSTRAINT_V_MAX 0.7f //0.8
+    #define DEFAULT_CONSTRAINT_VT_MAX 1.0f
 
-#define ASSERV_BLOCK_TIME_LIMIT 1   // 1s "blocké" avant de tout couper
+    #define DEFAULT_CONSTRAINT_A_MAX 0.5f //0.6
+    #define DEFAULT_CONSTRAINT_AT_MAX 1.0f
+
+    #define ASSERV_BLOCK_TIME_LIMIT 1   // 1s "blocké" avant de tout couper
+#else
+    #define DEFAULT_CONSTRAINT_V_MAX 0.3f //0.8
+    #define DEFAULT_CONSTRAINT_VT_MAX 1.0f
+
+    #define DEFAULT_CONSTRAINT_A_MAX 0.3f //0.6
+    #define DEFAULT_CONSTRAINT_AT_MAX 1.0f
+
+    #define ASSERV_BLOCK_TIME_LIMIT 1   // 1s "blocké" avant de tout couper
+#endif
 
 /*############################################################################*/
 /*                                  Asserv                                    */

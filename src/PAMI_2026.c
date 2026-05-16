@@ -151,7 +151,7 @@ void core1_entry() {
     // --- VARIABLES POUR LE CHRONOMÈTRE STRICT (40s) ---
     static bool match_in_progress = false;
     static uint32_t time_at_leash_pull = 0;
-    const uint32_t LIDAR_ACTIVATION_DELAY = 40000; // 40 secondes en ms
+    const uint32_t LIDAR_ACTIVATION_DELAY = START_MATCH_DELAY; // 40000; // 40 secondes en ms
 
     // Profilage CPU Core 1
     uint32_t profilage_start_timer = time_us_32() / 1000; 

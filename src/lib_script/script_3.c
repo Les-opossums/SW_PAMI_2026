@@ -116,7 +116,7 @@ void script_match_3_loop(void){
                 Goal_Pos.x = 0.15f;        // Va à 0.8
             }   
             avoidance_en = 1;
-            Goal_Pos.y = 0.8f;            // Reste à 0.8
+            Goal_Pos.y = 0.88f;            // Reste à 0.8
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 

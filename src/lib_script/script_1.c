@@ -106,11 +106,11 @@ void script_match_1_loop(void){
 
         case 4:
             if (IHM.team_state == BLEU) {
-                Goal_Pos.x = 1.75f;        // Va à 1.75
+                Goal_Pos.x = 1.82f;        // Va à 1.75
             } else {
-                Goal_Pos.x = 1.25f;        // Va à 1.25
+                Goal_Pos.x = 1.15f;        // Va à 1.25
             }   
-            Goal_Pos.y = 1.45f;            // Reste à 1.45
+            Goal_Pos.y = 1.35f;            // Reste à 1.45
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 

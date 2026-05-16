@@ -24,7 +24,8 @@ void script_match_4_loop(void){
         }
         Fusion_Init(init_pos.x, init_pos.y, init_pos.t); 
         servo_enabled = false;
-        avoidance_en = 1;
+        avoidance_en = 0;
+        lidar_loc_en = 0;
     } else {
         previous_AU_state = IHM.au_state;
     }
@@ -81,6 +82,7 @@ void script_match_4_loop(void){
         case 1:
             if (Timer_ms1 - timer_match >= START_MATCH_DELAY) {
                 match_state++;
+                avoidance_en = 0; // On force la désactivation de l'évitement dans la zone de départ
             }
             break;
             
@@ -90,8 +92,9 @@ void script_match_4_loop(void){
             } else {
                 Goal_Pos.x = 0.25f;        
             }        
-            Goal_Pos.y = 1.15f;            
+            Goal_Pos.y = 1.15f;
             Goal_Pos.t = init_pos.t;
+            lidar_loc_en = 1;
             motion_pos(Goal_Pos);
             match_state++; 
             break;
@@ -116,7 +119,7 @@ void script_match_4_loop(void){
             } else {
                 Goal_Pos.x = 0.7f;        // Va à 0.8
             }   
-            Goal_Pos.y = 0.1f;            // Reste à 0.8
+            Goal_Pos.y = 0.12f;            // Reste à 0.8
             Goal_Pos.t = init_pos.t;
             motion_pos(Goal_Pos);
             match_state++; 
@@ -129,8 +132,9 @@ void script_match_4_loop(void){
             dist = sqrtf(dx * dx + dy * dy);
 
             // Désactivation de l'évitement à moins de 10cm
-            if (dist <= 0.10f) {
+            if (dist <= 0.20f) {
                 avoidance_en = 0;
+                motion_free();
             }
 
             // Fin du parcours : ici on attend l'arrêt complet
@@ -145,6 +149,8 @@ void script_match_4_loop(void){
             break;
 
         case 101:
+            motion_free();
+            avoidance_en = 0;
             break;
 
         default:

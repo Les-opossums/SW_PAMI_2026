@@ -1,12 +1,23 @@
 #ifndef LIB_SCRIPT_H
 #define LIB_SCRIPT_H
 
-#define START_MATCH_DELAY 85000
-#define ENDGAME_TIME 100000
-#define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
-#define START_PLACEMENT_TIME 50000 //15000 // 15 secondes pour le placement initial avant de commencer les mouvements
-#define WAYPOINT_TOLERANCE 0.25f // Rayon de 25 cm pour valider le passage "à la volée"
+#ifndef TEST_MODE_P
+#define TEST_MODE_P 0
+#endif
 
+#if TEST_MODE_P
+    #define START_MATCH_DELAY 5000 //85000
+    #define ENDGAME_TIME 20000 // 100000
+    #define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
+    #define START_PLACEMENT_TIME 500 // 50000 //15000 // 15 secondes pour le placement initial avant de commencer les mouvements
+    #define WAYPOINT_TOLERANCE 0.25f // Rayon de 25 cm pour valider le passage "à la volée"
+#else
+    #define START_MATCH_DELAY 85000
+    #define ENDGAME_TIME 100000
+    #define SERVO_ACTIVATION_TIME (ENDGAME_TIME - 10000) // 90 secondes en ms (soit 10s avant la fin de 100s)
+    #define START_PLACEMENT_TIME 50000 //15000 // 15 secondes pour le placement initial avant de commencer les mouvements
+    #define WAYPOINT_TOLERANCE 0.25f // Rayon de 25 cm pour valider le passage "à la volée"
+#endif
 
 // #define START_MATCH_DELAY 10000
 // #define ENDGAME_TIME 250000
